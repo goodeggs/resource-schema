@@ -5,6 +5,6 @@ schema = new mongoose.Schema
   product:
     id: type: mongoose.Schema.ObjectId
     name: type: String
-    value: type: Number
+    price: type: Number
 
 module.exports = mongoose.model 'Model', schema

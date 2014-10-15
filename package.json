@@ -20,7 +20,9 @@
     "sinon": "^1.10.3",
     "chai": "^1.9.2",
     "fibrous": "^0.3.3",
-    "unionized-mongoose": "^1.0.0"
+    "unionized-mongoose": "^1.0.0",
+    "lodash": "^2.4.1",
+    "underscore": "^1.7.0"
   },
   "devDependencies": {
     "coffee-script": ">=1.7.x",

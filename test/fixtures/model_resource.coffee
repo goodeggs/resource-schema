@@ -3,9 +3,12 @@ MongooseResource = require '../..'
 express = require 'express'
 
 modelResource = new MongooseResource Model, {
+  # single field
   'name'
+  # nested field
+  'product.price'
+  # renamed field
   'productName': 'product.name'
-  'product.price': 'product.value'
   # 'product.newId': 'product.id'
 }
 

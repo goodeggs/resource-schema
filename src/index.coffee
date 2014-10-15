@@ -1,5 +1,6 @@
 dot = require 'dot-component'
 mongoose = require 'mongoose'
+_ = require 'underscore'
 fibrous = require 'fibrous'
 
 module.exports = class RestfulResource
@@ -23,7 +24,6 @@ module.exports = class RestfulResource
     fibrous (req, res, next) =>
       limit = @_extractLimitFromQuery req.query
       select = @_extractModelSelectFieldsFromQuery req.query
-      # TODO: just directly get model search fields here?
       searchFields = @_selectValidResourceSearchFieldsFromQuery req.query
       dotSearchFields = @_convertKeysToDotStrings searchFields
 
@@ -55,20 +55,22 @@ module.exports = class RestfulResource
     resourceInstance
 
   _extractLimitFromQuery: (query) =>
-    limit = query.limit ? 100
-    delete query.limit
+    limit = query.$limit ? 100
+    delete query.$limit
     limit
 
   _extractModelSelectFieldsFromQuery: (query) =>
     [resourceFields, modelFields] = @_getResourceAndModelFieldsFromSchema()
-    select = query.select
+    select = query.$select
     if select
-      selectResource = _(select.split(' ')).intersection(resourceFields).join(' ')
-      select = selectResource.map (selectResourceField) -> @schema[selectResourceField]
+      select = select.split(' ') if typeof select is 'string'
+      resourceSelectFields = _(select).intersection resourceFields
+      modelSelectFields = resourceSelectFields.map (resourceSelectField) => @schema[resourceSelectField]
+      modelSelectFields = modelSelectFields.join(' ')
     else
-      select = modelFields.join(' ')
-    delete query.select
-    select
+      modelSelectFields = modelFields.join(' ')
+    delete query.$select
+    modelSelectFields
 
   _selectValidResourceSearchFieldsFromQuery: (query) =>
     queryDotString = @_convertKeysToDotStrings query
