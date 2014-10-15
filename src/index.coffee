@@ -8,7 +8,7 @@ module.exports = class RestfulResource
   get: (paramId) =>
     fibrous (req, res, next) =>
       id = req.params[paramId]
-      select = @_extractSelectFromQuery req.query
+      select = @_extractModelSelectFieldsFromQuery req.query
       try
         modelQuery = @Model.findById(id)
         modelQuery = modelQuery.select(select) if select?
@@ -17,35 +17,33 @@ module.exports = class RestfulResource
         res.send 400, e.stack
       if not modelFound?
         res.send 404, "No #{paramId} found with id #{id}"
-      res.body = @_createResourceFromModelInstance(modelFound)
+      res.send @_createResourceFromModelInstance(modelFound)
 
-  query: =>
+  query: ->
     fibrous (req, res, next) =>
-      limit = @_exctractLimitFromQuery req.query
-      select = @_extractSelectFromQuery req.query
-      searchFields = @_selectValidSearchFieldsFromQuery req.query
+      limit = @_extractLimitFromQuery req.query
+      select = @_extractModelSelectFieldsFromQuery req.query
+      # TODO: just directly get model search fields here?
+      searchFields = @_selectValidResourceSearchFieldsFromQuery req.query
+      dotSearchFields = @_convertKeysToDotStrings searchFields
 
       try
         modelQuery = @Model.find()
-        for resourceField, modelField of @schema
-          value = dot.get searchFields, resourceField
-          if value
-            value = new mongoose.Types.ObjectId(value) if @_isObjectId(value)
-            modelQuery = modelQuery.where(modelField).equals value
-
+        for resourceField, value of dotSearchFields
+          modelField = @schema[resourceField]
+          modelQuery = modelQuery.where(modelField).equals value
         modelQuery = modelQuery.select(select) if select?
         modelQuery = modelQuery.limit(limit) if limit?
         modelsFound = modelQuery.sync.exec()
       catch e
         res.send 400, e.stack
 
-      resources = []
-      for modelFound in (modelsFound or [])
-        resources.push @_createResourceFromModelInstance(modelFound)
+      resources = modelsFound.map (modelFound) =>
+        @_createResourceFromModelInstance(modelFound)
 
-      res.body = resources
+      res.send resources
 
-  send: fibrous (req, res) =>
+  send: (req, res) =>
     res.body ?= {}
     res.send res.body
 
@@ -53,30 +51,45 @@ module.exports = class RestfulResource
     resourceInstance = {}
     for resourceField, modelField of @schema
       value = dot.get modelInstance, modelField
-      dot.set resourceInstance, resourceField, value
+      dot.set(resourceInstance, resourceField, value) if value
     resourceInstance
 
-  _exctractLimitFromQuery: (query) =>
+  _extractLimitFromQuery: (query) =>
     limit = query.limit ? 100
     delete query.limit
     limit
 
-  _extractSelectFromQuery: (query) =>
+  _extractModelSelectFieldsFromQuery: (query) =>
     [resourceFields, modelFields] = @_getResourceAndModelFieldsFromSchema()
     select = query.select
     if select
-      select = _(select.split(' ')).intersection(resourceFields).join(' ')
+      selectResource = _(select.split(' ')).intersection(resourceFields).join(' ')
+      select = selectResource.map (selectResourceField) -> @schema[selectResourceField]
     else
-      select = resourceFields.join(' ')
+      select = modelFields.join(' ')
     delete query.select
     select
 
-  _selectValidSearchFieldsFromQuery: (query) =>
+  _selectValidResourceSearchFieldsFromQuery: (query) =>
+    queryDotString = @_convertKeysToDotStrings query
     [resourceFields, modelFields] = @_getResourceAndModelFieldsFromSchema()
     validFields = {}
-    for field, value of query
-      validFields[field] = value if resourceFields[field]
+    for field, value of queryDotString
+      if field in resourceFields
+        dot.set validFields, field, value
     validFields
+
+  _convertKeysToDotStrings: (obj) =>
+    dotKeys = {}
+    dotStringify = (obj, current) ->
+      for key, value of obj
+        newKey = if current then current + "." + key else key
+        if value and typeof value is "object"
+          dotStringify(value, newKey)
+        else
+          dotKeys[newKey] = value
+    dotStringify(obj)
+    return dotKeys
 
   _getResourceAndModelFieldsFromSchema: =>
     resourceFields = Object.keys @schema
