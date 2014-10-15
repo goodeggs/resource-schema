@@ -15,9 +15,9 @@ module.exports = class RestfulResource
         modelQuery = modelQuery.select(select) if select?
         modelFound = modelQuery.sync.exec()
       catch e
-        res.send 400, e.stack
+        res.status(400).send e.stack
       if not modelFound?
-        res.send 404, "No #{paramId} found with id #{id}"
+        res.status(404).send "No #{paramId} found with id #{id}"
       res.send @_createResourceFromModelInstance(modelFound)
 
   query: ->
