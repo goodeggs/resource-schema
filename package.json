@@ -35,6 +35,7 @@
     "compile": "coffee --bare --compile --output lib/ src/",
     "build": "npm run compile",
     "test": "mocha",
-    "pretest": "npm run build"
+    "pretest": "npm run build",
+    "prepublish": "npm run build"
   }
 }
