@@ -8,6 +8,6 @@ app.use bodyParser.json()
 app.use bodyParser.urlencoded()
 app.use cookieParser()
 
-app.use '/model_resource', require './model_resource'
+app.use '/resource', require './resource'
 
 module.exports = app

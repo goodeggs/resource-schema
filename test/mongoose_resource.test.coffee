@@ -18,7 +18,7 @@ describe 'mongoose-resource', ->
         Model.sync.remove()
         Model.sync.create name: 'test'
         response = request.sync.get
-          url: 'http://127.0.0.1:4000/model_resource',
+          url: 'http://127.0.0.1:4000/resource',
           json: true
 
       it 'returns an array of objects', ->
@@ -34,7 +34,7 @@ describe 'mongoose-resource', ->
           Model.sync.create name: 'test2'
 
           response = request.sync.get
-            url: 'http://127.0.0.1:4000/model_resource?name=test1',
+            url: 'http://127.0.0.1:4000/resource?name=test1',
             json: true
 
         it 'filters by the param', ->
@@ -49,7 +49,7 @@ describe 'mongoose-resource', ->
           Model.sync.create product: price: 25
 
           response = request.sync.get
-            url: 'http://127.0.0.1:4000/model_resource?product[price]=25',
+            url: 'http://127.0.0.1:4000/resource?product[price]=25',
             json: true
 
         it 'filters by the field', ->
@@ -64,7 +64,7 @@ describe 'mongoose-resource', ->
           Model.sync.create product: name: 'peaches'
 
           response = request.sync.get
-            url: 'http://127.0.0.1:4000/model_resource?productName=apples',
+            url: 'http://127.0.0.1:4000/resource?productName=apples',
             json: true
 
         it 'filters by the field, and returns the resource with the renamed field', ->
@@ -80,7 +80,7 @@ describe 'mongoose-resource', ->
         Model.sync.create product: name: 'bananas'
 
         response = request.sync.get
-          url: 'http://127.0.0.1:4000/model_resource?$limit=2',
+          url: 'http://127.0.0.1:4000/resource?$limit=2',
           json: true
 
       it 'limits the returned results', ->
@@ -96,7 +96,7 @@ describe 'mongoose-resource', ->
             product: name: 'apples'
 
           response = request.sync.get
-            url: 'http://127.0.0.1:4000/model_resource?$select=name',
+            url: 'http://127.0.0.1:4000/resource?$select=name',
             json: true
 
         it 'selects from the available resource fields', ->
@@ -113,7 +113,7 @@ describe 'mongoose-resource', ->
             product: price: 25
 
           response = request.sync.get
-            url: 'http://127.0.0.1:4000/model_resource',
+            url: 'http://127.0.0.1:4000/resource',
             json: true
             qs: $select: 'product.price'
 
@@ -131,7 +131,7 @@ describe 'mongoose-resource', ->
             product: price: 25
 
           response = request.sync.get
-            url: "http://127.0.0.1:4000/model_resource?$select=product.price",
+            url: "http://127.0.0.1:4000/resource?$select=product.price",
             json: true
 
         it 'selects from the available resource fields', ->
@@ -150,7 +150,7 @@ describe 'mongoose-resource', ->
               name: 'apples'
 
           response = request.sync.get
-            url: "http://127.0.0.1:4000/model_resource?$select[]=product.price&$select[]=productName",
+            url: "http://127.0.0.1:4000/resource?$select[]=product.price&$select[]=productName",
             json: true
 
 
@@ -171,7 +171,7 @@ describe 'mongoose-resource', ->
               name: 'apples'
 
           response = request.sync.get
-            url: "http://127.0.0.1:4000/model_resource",
+            url: "http://127.0.0.1:4000/resource",
             json: true
             qs: $select: 'product.price productName'
 
@@ -191,20 +191,20 @@ describe 'mongoose-resource', ->
 
       it 'returns the object if found', fibrous ->
         response = request.sync.get
-          url: "http://127.0.0.1:4000/model_resource/#{model._id}"
+          url: "http://127.0.0.1:4000/resource/#{model._id}"
           json: true
         expect(response.statusCode).to.equal 200
         expect(response.body.name).to.equal 'test'
 
       it 'returns 404 if object not found', fibrous ->
         response = request.sync.get
-          url: "http://127.0.0.1:4000/model_resource/#{new mongoose.Types.ObjectId()}"
+          url: "http://127.0.0.1:4000/resource/#{new mongoose.Types.ObjectId()}"
           json: true
         expect(response.statusCode).to.equal 404
 
       it 'returns 400 if objectId not valid', fibrous ->
         response = request.sync.get
-          url: "http://127.0.0.1:4000/model_resource/1234"
+          url: "http://127.0.0.1:4000/resource/1234"
           json: true
         expect(response.statusCode).to.equal 400
 
@@ -218,7 +218,7 @@ describe 'mongoose-resource', ->
             product: name: 'apples'
 
           response = request.sync.get
-            url: "http://127.0.0.1:4000/model_resource/#{model._id}?$select=name",
+            url: "http://127.0.0.1:4000/resource/#{model._id}?$select=name",
             json: true
 
         it 'selects from the available resource fields', ->
@@ -235,7 +235,7 @@ describe 'mongoose-resource', ->
             product: price: 25
 
           response = request.sync.get
-            url: "http://127.0.0.1:4000/model_resource/#{model._id}",
+            url: "http://127.0.0.1:4000/resource/#{model._id}",
             json: true
             qs: $select: 'product.price'
 
@@ -253,7 +253,7 @@ describe 'mongoose-resource', ->
             product: price: 25
 
           response = request.sync.get
-            url: "http://127.0.0.1:4000/model_resource/#{model._id}?$select=product.price",
+            url: "http://127.0.0.1:4000/resource/#{model._id}?$select=product.price",
             json: true
 
         it 'selects from the available resource fields', ->
@@ -272,7 +272,7 @@ describe 'mongoose-resource', ->
               name: 'apples'
 
           response = request.sync.get
-            url: "http://127.0.0.1:4000/model_resource/#{model._id}?$select[]=product.price&$select[]=productName",
+            url: "http://127.0.0.1:4000/resource/#{model._id}?$select[]=product.price&$select[]=productName",
             json: true
 
 
@@ -293,7 +293,7 @@ describe 'mongoose-resource', ->
               name: 'apples'
 
           response = request.sync.get
-            url: "http://127.0.0.1:4000/model_resource/#{model._id}",
+            url: "http://127.0.0.1:4000/resource/#{model._id}",
             json: true
             qs: $select: 'product.price productName'
 
@@ -309,7 +309,7 @@ describe 'mongoose-resource', ->
       Model.sync.remove()
 
       response = request.sync.post
-        url: "http://127.0.0.1:4000/model_resource"
+        url: "http://127.0.0.1:4000/resource"
         json:
           name: 'test'
           productName: 'apples'
@@ -339,7 +339,7 @@ describe 'mongoose-resource', ->
           price: 25
 
       response = request.sync.put
-        url: "http://127.0.0.1:4000/model_resource/#{model._id}"
+        url: "http://127.0.0.1:4000/resource/#{model._id}"
         json:
           name: 'test'
           productName: 'berries'

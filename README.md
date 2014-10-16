@@ -1,4 +1,4 @@
-# Mongoose Resource
+# Resource Schema
 [![NPM version](https://badge.fury.io/js/mongoose-resource.png)](http://badge.fury.io/js/mongoose-resource)
 
 
