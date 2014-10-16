@@ -16,4 +16,5 @@ module.exports = app = express()
 
 app.get '/', modelResource.query()
 app.post '/', modelResource.save()
+app.put '/:modelId', modelResource.update('modelId')
 app.get '/:modelId', modelResource.get('modelId')

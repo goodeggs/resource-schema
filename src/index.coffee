@@ -16,7 +16,7 @@ module.exports = class RestfulResource
           return res.status(400).send err
         if not modelFound?
           return res.status(404).send "No #{paramId} found with id #{id}"
-        res.send @_createResourceFromModelInstance(modelFound)
+        res.send @_createResourceFromModel(modelFound)
 
   query: ->
     (req, res, next) =>
@@ -34,34 +34,48 @@ module.exports = class RestfulResource
       modelQuery.exec (err, modelsFound) =>
         res.send 400, err if err
         resources = modelsFound.map (modelFound) =>
-          @_createResourceFromModelInstance(modelFound)
+          @_createResourceFromModel(modelFound)
         res.send resources
 
   save: ->
     (req, res, next) =>
-      newModelData = @_createModelInstanceFromResource req.body
-      @Model.create newModelData, (err, modelSaved) =>
+      newModelData = @_createModelFromResource req.body
+      model = new @Model(newModelData)
+      model.save (err, modelSaved) =>
         res.send 400, err if err
-        resource = @_createResourceFromModelInstance modelSaved
+        resource = @_createResourceFromModel modelSaved
         res.status(201).send resource
+
+  update: (paramId) ->
+    (req, res, next) =>
+      id = req.params[paramId]
+      newModelData = @_createModelFromResource req.body
+      # if using mongoose timestamps plugin:
+      # since we are not updating an instance of mongoose, we need to manually add the updatedAt timestamp
+      newModelData.updatedAt = new Date() if newModelData.updatedAt
+      @Model.findByIdAndUpdate id, newModelData, (err, modelUpdated) =>
+        res.send 400, err if err
+        res.send 404, 'resource not found' if !modelUpdated
+        resource = @_createResourceFromModel modelUpdated
+        res.status(200).send resource
 
   send: (req, res) =>
     res.body ?= {}
     res.send res.body
 
-  _createResourceFromModelInstance: (modelInstance) =>
-    resourceInstance = {}
+  _createResourceFromModel: (model) =>
+    resource = {}
     for resourceField, modelField of @schema
-      value = dot.get modelInstance, modelField
-      dot.set(resourceInstance, resourceField, value) if value
-    resourceInstance
+      value = dot.get model, modelField
+      dot.set(resource, resourceField, value) if value
+    resource
 
-  _createModelInstanceFromResource: (resource) =>
-    modelInstance = {}
+  _createModelFromResource: (resource) =>
+    model = {}
     for resourceField, modelField of @schema
       value = dot.get resource, resourceField
-      dot.set(modelInstance, modelField, value) if value
-    modelInstance
+      dot.set(model, modelField, value) if value
+    model
 
   _extractLimitFromQuery: (query) =>
     limit = query.$limit ? 100
@@ -69,7 +83,7 @@ module.exports = class RestfulResource
     limit
 
   _extractModelSelectFieldsFromQuery: (query) =>
-    [resourceFields, modelFields] = @_getResourceAndModelFieldsFromSchema()
+    [resourceFields, modelFields] = @_getResourceAndModelFields()
     select = query.$select
     if select
       select = select.split(' ') if typeof select is 'string'
@@ -83,7 +97,7 @@ module.exports = class RestfulResource
 
   _selectValidResourceSearchFieldsFromQuery: (query) =>
     queryDotString = @_convertKeysToDotStrings query
-    [resourceFields, modelFields] = @_getResourceAndModelFieldsFromSchema()
+    [resourceFields, modelFields] = @_getResourceAndModelFields()
     validFields = {}
     for field, value of queryDotString
       if field in resourceFields
@@ -102,7 +116,7 @@ module.exports = class RestfulResource
     dotStringify(obj)
     return dotKeys
 
-  _getResourceAndModelFieldsFromSchema: =>
+  _getResourceAndModelFields: =>
     resourceFields = Object.keys @schema
     modelFields = resourceFields.map (resourceField) => @schema[resourceField]
     [resourceFields, modelFields]
