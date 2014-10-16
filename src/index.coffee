@@ -2,7 +2,8 @@ dot = require 'dot-component'
 _ = require 'underscore'
 
 module.exports = class RestfulResource
-  constructor: (@Model, @schema) ->
+  constructor: (@Model, schema) ->
+    @schema = @_convertKeysToDotStrings(schema)
 
   get: (paramId) =>
     (req, res, next) =>

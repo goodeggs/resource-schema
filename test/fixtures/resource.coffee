@@ -4,12 +4,10 @@ express = require 'express'
 
 resource = new ResourceSchema Model, {
   '_id'
-  # single field
   'name'
-  # nested field
   'product.price'
-  # renamed field
-  'productName': 'product.name'
+  productName: 'product.name'
+  normal: nesting: 'normal.nesting'
 }
 
 module.exports = app = express()
