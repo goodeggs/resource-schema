@@ -3,6 +3,7 @@ MongooseResource = require '../..'
 express = require 'express'
 
 modelResource = new MongooseResource Model, {
+  '_id'
   # single field
   'name'
   # nested field
@@ -14,4 +15,5 @@ modelResource = new MongooseResource Model, {
 module.exports = app = express()
 
 app.get '/', modelResource.query()
+app.post '/', modelResource.save()
 app.get '/:modelId', modelResource.get('modelId')

@@ -32,11 +32,18 @@ module.exports = class RestfulResource
       modelQuery = modelQuery.select(select) if select?
       modelQuery = modelQuery.limit(limit) if limit?
       modelQuery.exec (err, modelsFound) =>
-        if err
-          res.send 400, err
+        res.send 400, err if err
         resources = modelsFound.map (modelFound) =>
           @_createResourceFromModelInstance(modelFound)
         res.send resources
+
+  save: ->
+    (req, res, next) =>
+      newModelData = @_createModelInstanceFromResource req.body
+      @Model.create newModelData, (err, modelSaved) =>
+        res.send 400, err if err
+        resource = @_createResourceFromModelInstance modelSaved
+        res.status(201).send resource
 
   send: (req, res) =>
     res.body ?= {}
@@ -48,6 +55,13 @@ module.exports = class RestfulResource
       value = dot.get modelInstance, modelField
       dot.set(resourceInstance, resourceField, value) if value
     resourceInstance
+
+  _createModelInstanceFromResource: (resource) =>
+    modelInstance = {}
+    for resourceField, modelField of @schema
+      value = dot.get resource, resourceField
+      dot.set(modelInstance, modelField, value) if value
+    modelInstance
 
   _extractLimitFromQuery: (query) =>
     limit = query.$limit ? 100
