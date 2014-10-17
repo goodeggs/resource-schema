@@ -6,14 +6,14 @@ q = require 'q'
 normalized schema:
 {
   normalField: {
-    model: Model
-    field: 'test.name'
+    $model: Model
+    $field: 'test.name'
   },
   dynamicField: {
-    model: Model
-    find: ->
-    get: ->
-    set: ->
+    $model: Model
+    $find: ->
+    $get: ->
+    $set: ->
   }
 }
 ###
@@ -51,10 +51,10 @@ module.exports = class RestfulResource
       queryPromises = []
       modelQuery = @Model.find()
       for resourceField, value of dotSearchFields
-        if modelField = @schema[resourceField].field
+        if modelField = @schema[resourceField].$field
           modelQuery = modelQuery.where(modelField).equals value
-        else if @schema[resourceField].find and resourceSearchFields[resourceField]
-          modelFinder = @schema[resourceField].find
+        else if @schema[resourceField].$find and resourceSearchFields[resourceField]
+          modelFinder = @schema[resourceField].$find
           searchValue = resourceSearchFields[resourceField]
           deferred = q.defer()
           modelFinder(searchValue, modelQuery, deferred.makeNodeResolver())
@@ -101,12 +101,12 @@ module.exports = class RestfulResource
     resource = {}
     waitingCount = 0
     for resourceField, config of @schema
-      if config.field
-        value = dot.get model, config.field
+      if config.$field
+        value = dot.get model, config.$field
         dot.set(resource, resourceField, value) if value
-      else if config.get and typeof config.get is 'function'
+      else if config.$get and typeof config.$get is 'function'
         waitingCount++
-        fieldGetter = config.get
+        fieldGetter = config.$get
         fieldGetter model, queryParams, (err, value) ->
           dot.set(resource, resourceField, value) if value
           waitingCount--
@@ -117,9 +117,9 @@ module.exports = class RestfulResource
   _createModelFromResource: (resource) =>
     model = {}
     for resourceField, config of @schema
-      if config.field
+      if config.$field
         value = dot.get resource, resourceField
-        dot.set(model, config.field, value) if value
+        dot.set(model, config.$field, value) if value
     model
 
   _extractLimitFromQuery: (query) =>
@@ -133,7 +133,7 @@ module.exports = class RestfulResource
     if select
       select = select.split(' ') if typeof select is 'string'
       resourceSelectFields = _(select).intersection resourceFields
-      modelSelectFields = resourceSelectFields.map (resourceSelectField) => @schema[resourceSelectField].field
+      modelSelectFields = resourceSelectFields.map (resourceSelectField) => @schema[resourceSelectField].$field
       modelSelectFields = modelSelectFields.join(' ')
     else
       modelSelectFields = modelFields.join(' ')
@@ -150,7 +150,7 @@ module.exports = class RestfulResource
     validFields
 
   _convertKeysToDotStrings: (obj) =>
-    resevedKeywords = ['find', 'get', 'set', 'model', 'field']
+    resevedKeywords = ['$find', '$get', '$set', '$model', '$field']
     dotKeys = {}
     dotStringify = (obj, current) ->
       for key, value of obj
@@ -167,7 +167,7 @@ module.exports = class RestfulResource
 
   _getResourceAndModelFields: =>
     resourceFields = Object.keys @schema
-    modelFields = resourceFields.map (resourceField) => @schema[resourceField].field
+    modelFields = resourceFields.map (resourceField) => @schema[resourceField].$field
     [resourceFields, modelFields]
 
   _getSchemaFromModel: (Model) =>
@@ -177,8 +177,8 @@ module.exports = class RestfulResource
     schema = {}
     for schemaKey in schemaKeys
       schema[schemaKey] =
-        model: Model
-        field: schemaKey
+        $model: Model
+        $field: schemaKey
     schema
 
   _normalizeSchema: (schema) =>
@@ -188,8 +188,8 @@ module.exports = class RestfulResource
       if typeof config is 'string'
         if @Model
           normalizedSchema[key] =
-            model: @Model
-            field: config
+            $model: @Model
+            $field: config
         else
           throw new Error "No model provided for field #{key}, and no default model provided"
       else

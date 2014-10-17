@@ -6,10 +6,11 @@ express = require 'express'
 
 resource = new ResourceSchema Model, {
   '_id'
-  parentName: get: fibrous (foundModel, queryParams) ->
-    parentModel = ParentModel.findOne('modelIds': foundModel._id).sync.exec()
-    return parentModel.name
-}
+  'parentName':
+    $get: fibrous (foundModel, queryParams) ->
+      parentModel = ParentModel.findOne('modelIds': foundModel._id).sync.exec()
+      return parentModel.name
+  }
 
 module.exports = app = express()
 

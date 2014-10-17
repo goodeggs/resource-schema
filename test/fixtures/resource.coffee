@@ -8,12 +8,13 @@ resource = new ResourceSchema Model, {
   '_id'
   'name'
   'product.price'
-  productName: 'product.name'
+  'productName': 'product.name'
   normal:
     nesting: 'normal.nesting'
-  parentName: find: fibrous (findValue, modelQuery) ->
-    parentModel = ParentModel.sync.findOne(name: findValue)
-    modelQuery.find().where('_id').in(parentModel.modelIds)
+  'parentName':
+    $find: fibrous (findValue, modelQuery) ->
+      parentModel = ParentModel.sync.findOne(name: findValue)
+      modelQuery.find().where('_id').in(parentModel.modelIds)
 
   # dynamicSetField: set: (savedResourceValue) ->
 }
