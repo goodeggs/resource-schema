@@ -6,16 +6,9 @@ express = require 'express'
 
 resource = new ResourceSchema Model, {
   '_id'
-  'name'
-  'product.price'
-  productName: 'product.name'
-  normal:
-    nesting: 'normal.nesting'
-  parentName: find: fibrous (findValue, modelQuery) ->
-    parentModel = ParentModel.sync.findOne(name: findValue)
-    modelQuery.find().where('_id').in(parentModel.modelIds)
-
-  # dynamicSetField: set: (savedResourceValue) ->
+  parentName: get: fibrous (foundModel, queryParams) ->
+    parentModel = ParentModel.findOne('modelIds': foundModel._id).sync.exec()
+    return parentModel.name
 }
 
 module.exports = app = express()

@@ -37,7 +37,9 @@ module.exports = class RestfulResource
           return res.status(400).send err
         if not modelFound?
           return res.status(404).send "No #{paramId} found with id #{id}"
-        res.send @_createResourceFromModel(modelFound)
+
+        @_createResourceFromModelPromise(modelFound).then (resource) ->
+          res.send resource
 
   query: ->
     (req, res, next) =>
@@ -63,9 +65,10 @@ module.exports = class RestfulResource
         modelQuery.limit(limit) if limit?
         modelQuery.exec (err, modelsFound) =>
           res.send 400, err if err
-          resources = modelsFound.map (modelFound) =>
-            @_createResourceFromModel(modelFound)
-          res.send resources
+          resourcePromises = modelsFound.map (modelFound) =>
+            @_createResourceFromModelPromise(modelFound, resourceSearchFields)
+          q.all(resourcePromises).then (resources) =>
+            res.send resources
 
   save: ->
     (req, res, next) =>
@@ -73,8 +76,8 @@ module.exports = class RestfulResource
       model = new @Model(newModelData)
       model.save (err, modelSaved) =>
         res.send 400, err if err
-        resource = @_createResourceFromModel modelSaved
-        res.status(201).send resource
+        @_createResourceFromModelPromise(modelSaved).then (resource) ->
+          res.status(201).send resource
 
   update: (paramId) ->
     (req, res, next) =>
@@ -86,20 +89,30 @@ module.exports = class RestfulResource
       @Model.findByIdAndUpdate id, newModelData, (err, modelUpdated) =>
         res.send 400, err if err
         res.send 404, 'resource not found' if !modelUpdated
-        resource = @_createResourceFromModel modelUpdated
-        res.status(200).send resource
+        @_createResourceFromModelPromise(modelUpdated).then (resource) ->
+          res.status(200).send resource
 
   send: (req, res) =>
     res.body ?= {}
     res.send res.body
 
-  _createResourceFromModel: (model) =>
+  _createResourceFromModelPromise: (model, queryParams) =>
+    deferred = q.defer()
     resource = {}
+    waitingCount = 0
     for resourceField, config of @schema
       if config.field
         value = dot.get model, config.field
         dot.set(resource, resourceField, value) if value
-    resource
+      else if config.get and typeof config.get is 'function'
+        waitingCount++
+        fieldGetter = config.get
+        fieldGetter model, queryParams, (err, value) ->
+          dot.set(resource, resourceField, value) if value
+          waitingCount--
+          deferred.resolve(resource) if waitingCount is 0
+    deferred.resolve(resource) if waitingCount is 0
+    return deferred.promise
 
   _createModelFromResource: (resource) =>
     model = {}
