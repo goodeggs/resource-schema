@@ -3,7 +3,10 @@ _ = require 'underscore'
 
 module.exports = class RestfulResource
   constructor: (@Model, schema) ->
-    @schema = @_convertKeysToDotStrings(schema)
+    if schema
+      @schema = @_convertKeysToDotStrings(schema)
+    else
+      @schema = @_getSchemaFromModel(@Model)
 
   get: (paramId) =>
     (req, res, next) =>
@@ -121,3 +124,12 @@ module.exports = class RestfulResource
     resourceFields = Object.keys @schema
     modelFields = resourceFields.map (resourceField) => @schema[resourceField]
     [resourceFields, modelFields]
+
+  _getSchemaFromModel: (Model) =>
+    # Paths already in dot notation
+    schemaKeys = Object.keys Model.schema.paths
+    schemaKeys.splice schemaKeys.indexOf('__v'), 1
+    schema = {}
+    schema[schemaKey] = schemaKey for schemaKey in schemaKeys
+    console.log 'schema', schema
+    schema
