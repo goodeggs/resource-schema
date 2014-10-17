@@ -2,7 +2,6 @@ sinon = require 'sinon'
 fibrous = require 'fibrous'
 mongoose = require 'mongoose'
 Model = require './fixtures/model.coffee'
-unionizedMongoose = require 'unionized-mongoose'
 expect = require('chai').expect
 request = require 'request'
 require './support/bootstrap'
@@ -72,6 +71,20 @@ describe 'resource-schema', ->
           it 'filters by the field, and returns the resource with the renamed field', ->
             expect(response.body.length).to.equal 1
             expect(response.body[0].productName).to.equal 'apples'
+
+        xdescribe 'invalid search field', ->
+          before fibrous ->
+            Model.sync.remove()
+            targetId = new mongoose.Types.ObjectId()
+            Model.sync.create product: name: 'apples'
+            Model.sync.create product: name: 'peaches'
+
+            response = request.sync.get
+              url: 'http://127.0.0.1:4000/resource?productType=fruit',
+              json: true
+
+          it 'returns an empty array', ->
+            expect(response.body.length).to.equal 0
 
       describe '$limit', ->
         before fibrous ->
@@ -360,6 +373,7 @@ describe 'resource-schema', ->
         expect(modelsFound[0].product.name).to.equal 'berries'
         expect(modelsFound[0].product.price).to.equal 25
         expect(modelsFound[0].name).to.equal 'test'
+
 
   describe 'no default model provided', ->
     describe '.get()', ->

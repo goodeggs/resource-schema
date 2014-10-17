@@ -1,10 +1,27 @@
 dot = require 'dot-component'
 _ = require 'underscore'
+q = require 'q'
+
+###
+normalized schema:
+{
+  normalField: {
+    model: Model
+    field: 'test.name'
+  },
+  dynamicField: {
+    model: Model
+    find: ->
+    get: ->
+    set: ->
+  }
+}
+###
 
 module.exports = class RestfulResource
   constructor: (@Model, schema) ->
     if schema
-      @schema = @_convertKeysToDotStrings(schema)
+      @schema = @_normalizeSchema(schema)
     else
       @schema = @_getSchemaFromModel(@Model)
 
@@ -26,20 +43,29 @@ module.exports = class RestfulResource
     (req, res, next) =>
       limit = @_extractLimitFromQuery req.query
       select = @_extractModelSelectFieldsFromQuery req.query
-      searchFields = @_selectValidResourceSearchFieldsFromQuery req.query
-      dotSearchFields = @_convertKeysToDotStrings searchFields
+      resourceSearchFields = @_selectValidResourceSearchFieldsFromQuery req.query
+      dotSearchFields = @_convertKeysToDotStrings resourceSearchFields
 
+      queryPromises = []
       modelQuery = @Model.find()
       for resourceField, value of dotSearchFields
-        modelField = @schema[resourceField]
-        modelQuery = modelQuery.where(modelField).equals value
-      modelQuery = modelQuery.select(select) if select?
-      modelQuery = modelQuery.limit(limit) if limit?
-      modelQuery.exec (err, modelsFound) =>
-        res.send 400, err if err
-        resources = modelsFound.map (modelFound) =>
-          @_createResourceFromModel(modelFound)
-        res.send resources
+        if modelField = @schema[resourceField].field
+          modelQuery = modelQuery.where(modelField).equals value
+        else if @schema[resourceField].find and resourceSearchFields[resourceField]
+          modelFinder = @schema[resourceField].find
+          searchValue = resourceSearchFields[resourceField]
+          deferred = q.defer()
+          modelFinder(searchValue, modelQuery, deferred.makeNodeResolver())
+          queryPromises.push(deferred.promise)
+
+      q.all(queryPromises).then =>
+        modelQuery.select(select) if select?
+        modelQuery.limit(limit) if limit?
+        modelQuery.exec (err, modelsFound) =>
+          res.send 400, err if err
+          resources = modelsFound.map (modelFound) =>
+            @_createResourceFromModel(modelFound)
+          res.send resources
 
   save: ->
     (req, res, next) =>
@@ -69,16 +95,18 @@ module.exports = class RestfulResource
 
   _createResourceFromModel: (model) =>
     resource = {}
-    for resourceField, modelField of @schema
-      value = dot.get model, modelField
-      dot.set(resource, resourceField, value) if value
+    for resourceField, config of @schema
+      if config.field
+        value = dot.get model, config.field
+        dot.set(resource, resourceField, value) if value
     resource
 
   _createModelFromResource: (resource) =>
     model = {}
-    for resourceField, modelField of @schema
-      value = dot.get resource, resourceField
-      dot.set(model, modelField, value) if value
+    for resourceField, config of @schema
+      if config.field
+        value = dot.get resource, resourceField
+        dot.set(model, config.field, value) if value
     model
 
   _extractLimitFromQuery: (query) =>
@@ -92,7 +120,7 @@ module.exports = class RestfulResource
     if select
       select = select.split(' ') if typeof select is 'string'
       resourceSelectFields = _(select).intersection resourceFields
-      modelSelectFields = resourceSelectFields.map (resourceSelectField) => @schema[resourceSelectField]
+      modelSelectFields = resourceSelectFields.map (resourceSelectField) => @schema[resourceSelectField].field
       modelSelectFields = modelSelectFields.join(' ')
     else
       modelSelectFields = modelFields.join(' ')
@@ -109,11 +137,15 @@ module.exports = class RestfulResource
     validFields
 
   _convertKeysToDotStrings: (obj) =>
+    resevedKeywords = ['find', 'get', 'set', 'model', 'field']
     dotKeys = {}
     dotStringify = (obj, current) ->
       for key, value of obj
         newKey = if current then current + "." + key else key
-        if value and typeof value is "object"
+        if key in resevedKeywords
+          dotKeys[current] = {}
+          dotKeys[current][key] = value
+        else if value and typeof value is "object"
           dotStringify(value, newKey)
         else
           dotKeys[newKey] = value
@@ -122,7 +154,7 @@ module.exports = class RestfulResource
 
   _getResourceAndModelFields: =>
     resourceFields = Object.keys @schema
-    modelFields = resourceFields.map (resourceField) => @schema[resourceField]
+    modelFields = resourceFields.map (resourceField) => @schema[resourceField].field
     [resourceFields, modelFields]
 
   _getSchemaFromModel: (Model) =>
@@ -130,6 +162,23 @@ module.exports = class RestfulResource
     schemaKeys = Object.keys Model.schema.paths
     schemaKeys.splice schemaKeys.indexOf('__v'), 1
     schema = {}
-    schema[schemaKey] = schemaKey for schemaKey in schemaKeys
-    console.log 'schema', schema
+    for schemaKey in schemaKeys
+      schema[schemaKey] =
+        model: Model
+        field: schemaKey
     schema
+
+  _normalizeSchema: (schema) =>
+    schema = @_convertKeysToDotStrings(schema)
+    normalizedSchema = {}
+    for key, config of schema
+      if typeof config is 'string'
+        if @Model
+          normalizedSchema[key] =
+            model: @Model
+            field: config
+        else
+          throw new Error "No model provided for field #{key}, and no default model provided"
+      else
+        normalizedSchema[key] = config
+    normalizedSchema
