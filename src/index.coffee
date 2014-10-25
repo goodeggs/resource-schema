@@ -23,7 +23,7 @@ module.exports = class RestfulResource
     else
       @schema = @_getSchemaFromModel(@Model)
 
-  get: (paramId) =>
+  show: (paramId) =>
     (req, res, next) =>
       id = req.params[paramId]
       select = @_extractModelSelectFieldsFromQuery req.query
