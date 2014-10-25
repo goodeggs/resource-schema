@@ -5,10 +5,10 @@ _ = require 'underscore'
 ResourceSchema = require '../..'
 express = require 'express'
 
-resource = new ResourceSchema Model, {
+resource = new ResourceSchema Model,
   _id: '_id'
   name: 'name'
-  'product.price'
+  'product.price': 'product.price'
   productName: 'product.name'
   normal:
     nesting: 'normal.nesting'
@@ -16,8 +16,7 @@ resource = new ResourceSchema Model, {
     $find: fibrous (searchValue, modelQuery) ->
       parentModel = ParentModel.sync.findOne(name: searchValue)
       modelQuery.find().where('_id').in(parentModel.modelIds)
-    # Include found models instead?
-    $get: fibrous (foundResources, queryParams) ->
+    $get: fibrous (foundResources, foundModels, queryParams) ->
       foundResourceIds = _(foundResources).pluck('_id')
       parentModels = ParentModel.sync.find(modelIds: $in: foundResourceIds)
       parentModelsByChildId = {}
@@ -26,7 +25,6 @@ resource = new ResourceSchema Model, {
           parentModelsByChildId[modelId.toString()] = parentModel
       foundResources.forEach (foundResource) ->
         foundResource.parentName = parentModelsByChildId[foundResource._id].name
-}
 
 module.exports = app = express()
 

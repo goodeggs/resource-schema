@@ -2,6 +2,8 @@ dot = require 'dot-component'
 _ = require 'underscore'
 q = require 'q'
 
+RESERVED_KEYWORDS = ['$find', '$get', '$set', '$field']
+
 ###
 normalized schema:
 {
@@ -43,7 +45,6 @@ module.exports = class ResourceSchema
         modelQuery.select(select) if select?
         modelQuery.limit(limit) if limit?
         modelQuery.exec (err, modelsFound) =>
-          console.log {modelsFound}
           res.send 400, err if err
           resources = modelsFound.map (modelFound) =>
             @_createResourceFromModel(modelFound, searchFields)
@@ -155,13 +156,12 @@ module.exports = class ResourceSchema
     @_convertKeysToDotStrings validFields
 
   _convertKeysToDotStrings: (obj) =>
-    resevedKeywords = ['$find', '$get', '$set', '$model', '$field']
     dotKeys = {}
     dotStringify = (obj, current) ->
       for key, value of obj
         newKey = if current then current + "." + key else key
-        if key in resevedKeywords
-          dotKeys[current] = {}
+        if key in RESERVED_KEYWORDS
+          dotKeys[current] ?= {}
           dotKeys[current][key] = value
         else if value and typeof value is "object"
           dotStringify(value, newKey)
@@ -182,7 +182,6 @@ module.exports = class ResourceSchema
     schema = {}
     for schemaKey in schemaKeys
       schema[schemaKey] =
-        $model: Model
         $field: schemaKey
     schema
 
@@ -193,7 +192,6 @@ module.exports = class ResourceSchema
       if typeof config is 'string'
         if @Model
           normalizedSchema[key] =
-            $model: @Model
             $field: config
         else
           throw new Error "No model provided for field #{key}, and no default model provided"
