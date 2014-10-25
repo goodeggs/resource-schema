@@ -48,7 +48,7 @@ module.exports = class ResourceSchema
           res.send 400, err if err
           resources = modelsFound.map (modelFound) =>
             @_createResourceFromModel(modelFound, searchFields)
-          @_resolveResourceGetsPromise(resources, req.query).then =>
+          @_resolveResourceGetPromises(resources, modelsFound, req.query).then =>
             res.send resources
 
   show: (paramId) =>
@@ -82,12 +82,14 @@ module.exports = class ResourceSchema
       newModelData = @_createModelFromResource req.body
       # if using mongoose timestamps plugin:
       # since we are not updating an instance of mongoose, we need to manually add the updatedAt timestamp
-      newModelData.updatedAt = new Date() if newModelData.updatedAt
-      @Model.findByIdAndUpdate id, newModelData, (err, modelUpdated) =>
-        res.send 400, err if err
-        res.send 404, 'resource not found' if !modelUpdated
-        resource = @_createResourceFromModel(modelUpdated)
-        res.status(200).send resource
+      # newModelData.updatedAt = new Date() if newModelData.updatedAt
+      @Model.findById id, (err, modelFound) =>
+        @_resolveResourceSetPromises(req.body, modelFound, {}).then =>
+        @Model.findByIdAndUpdate id, newModelData, (err, modelUpdated) =>
+          res.send 400, err if err
+          res.send 404, 'resource not found' if !modelUpdated
+          resource = @_createResourceFromModel(modelUpdated)
+          res.status(200).send resource
 
   send: (req, res) =>
     res.body ?= {}
@@ -102,23 +104,23 @@ module.exports = class ResourceSchema
         dot.set(resource, resourceField, value) if value
     resource
 
-  _resolveResourceGetsPromise: (resources, queryParams) =>
+  _resolveResourceSetPromises: (resource, model, queryParams) =>
+    setPromises = []
+    for resourceField, config of @schema
+      if config.$set
+        d = q.defer()
+        config.$set(resource[resourceField], model, queryParams, (err, results) -> d.resolve())
+        setPromises.push d.promise
+    return q.all setPromises
+
+  _resolveResourceGetPromises: (resources, models, queryParams) =>
     getPromises = []
     for resourceField, config of @schema
       if config.$get
         d = q.defer()
-        config.$get(resources, queryParams, (err, results) -> d.resolve())
+        config.$get(resources, models, queryParams, (err, results) -> d.resolve())
         getPromises.push d.promise
     return q.all getPromises
-
-    getPromises = resources
-    resource = {}
-    waitingCount = 0
-    for resourceField, config of @schema
-      if config.$field
-        value = dot.get model, config.$field
-        dot.set(resource, resourceField, value) if value
-    resource
 
   _createModelFromResource: (resource) =>
     model = {}
