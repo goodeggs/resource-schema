@@ -65,7 +65,8 @@ module.exports = class ResourceSchema
           return res.status(404).send "No #{paramId} found with id #{id}"
 
         resource = @_createResourceFromModel(modelFound)
-        res.send resource
+        @_resolveResourceGetPromises([resource], [modelFound], req.query).then =>
+          res.send resource
 
   create: ->
     (req, res, next) =>

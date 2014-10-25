@@ -2,6 +2,7 @@ sinon = require 'sinon'
 fibrous = require 'fibrous'
 mongoose = require 'mongoose'
 Model = require './fixtures/model.coffee'
+ParentModel = require './fixtures/parent_model.coffee'
 expect = require('chai').expect
 request = require 'request'
 require './support/bootstrap'
@@ -16,6 +17,9 @@ describe '.show()', ->
     before fibrous ->
       Model.sync.remove()
       model = Model.sync.create name: 'test'
+      ParentModel.sync.create
+        name: 'parent'
+        modelIds: [model._id]
 
     it 'returns the object if found', fibrous ->
       response = request.sync.get
@@ -23,6 +27,14 @@ describe '.show()', ->
         json: true
       expect(response.statusCode).to.equal 200
       expect(response.body.name).to.equal 'test'
+
+    it 'returns the dynamic get value', fibrous ->
+      response = request.sync.get
+        url: "http://127.0.0.1:4000/resource/#{model._id}"
+        json: true
+      console.log {response:response.body}
+      expect(response.statusCode).to.equal 200
+      expect(response.body.parentName).to.equal 'parent'
 
     it 'returns 404 if object not found', fibrous ->
       response = request.sync.get
