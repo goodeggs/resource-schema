@@ -10,7 +10,7 @@ MongooseResource = require '..'
 
 {response, model} = {}
 
-describe '.query()', ->
+describe '.index()', ->
   describe 'no search fields', ->
     before fibrous ->
       Model.sync.remove()

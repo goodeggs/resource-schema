@@ -23,23 +23,7 @@ module.exports = class RestfulResource
     else
       @schema = @_getSchemaFromModel(@Model)
 
-  show: (paramId) =>
-    (req, res, next) =>
-      id = req.params[paramId]
-      select = @_extractModelSelectFieldsFromQuery req.query
-
-      modelQuery = @Model.findById(id)
-      modelQuery = modelQuery.select(select) if select?
-      modelQuery.exec (err, modelFound) =>
-        if err
-          return res.status(400).send err
-        if not modelFound?
-          return res.status(404).send "No #{paramId} found with id #{id}"
-
-        @_createResourceFromModelPromise(modelFound).then (resource) ->
-          res.send resource
-
-  query: ->
+  index: ->
     (req, res, next) =>
       limit = @_extractLimitFromQuery req.query
       select = @_extractModelSelectFieldsFromQuery req.query
@@ -67,6 +51,22 @@ module.exports = class RestfulResource
             @_createResourceFromModelPromise(modelFound, resourceSearchFields)
           q.all(resourcePromises).then (resources) =>
             res.send resources
+
+  show: (paramId) =>
+    (req, res, next) =>
+      id = req.params[paramId]
+      select = @_extractModelSelectFieldsFromQuery req.query
+
+      modelQuery = @Model.findById(id)
+      modelQuery = modelQuery.select(select) if select?
+      modelQuery.exec (err, modelFound) =>
+        if err
+          return res.status(400).send err
+        if not modelFound?
+          return res.status(404).send "No #{paramId} found with id #{id}"
+
+        @_createResourceFromModelPromise(modelFound).then (resource) ->
+          res.send resource
 
   create: ->
     (req, res, next) =>
