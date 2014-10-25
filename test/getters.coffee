@@ -7,6 +7,8 @@ expect = require('chai').expect
 request = require 'request'
 require './support/bootstrap'
 
+{response, model} = {}
+
 describe 'dynamic model getters', ->
   describe '.get()', ->
     {model1} = {}
