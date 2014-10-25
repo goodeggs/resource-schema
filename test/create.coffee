@@ -10,7 +10,7 @@ MongooseResource = require '..'
 
 {response, model} = {}
 
-describe '.save()', ->
+describe '.create()', ->
   before fibrous ->
     Model.sync.remove()
 

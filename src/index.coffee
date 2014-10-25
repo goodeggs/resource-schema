@@ -6,11 +6,9 @@ q = require 'q'
 normalized schema:
 {
   normalField: {
-    $model: Model
     $field: 'test.name'
   },
   dynamicField: {
-    $model: Model
     $find: ->
     $get: ->
     $set: ->
@@ -70,7 +68,7 @@ module.exports = class RestfulResource
           q.all(resourcePromises).then (resources) =>
             res.send resources
 
-  save: ->
+  create: ->
     (req, res, next) =>
       newModelData = @_createModelFromResource req.body
       model = new @Model(newModelData)
