@@ -16,7 +16,7 @@ normalized schema:
 }
 ###
 
-module.exports = class RestfulResource
+module.exports = class ResourceSchema
   constructor: (@Model, schema) ->
     if schema
       @schema = @_normalizeSchema(schema)
@@ -25,48 +25,46 @@ module.exports = class RestfulResource
 
   index: ->
     (req, res, next) =>
-      limit = @_extractLimitFromQuery req.query
-      select = @_extractModelSelectFieldsFromQuery req.query
-      resourceSearchFields = @_selectValidResourceSearchFieldsFromQuery req.query
-      dotSearchFields = @_convertKeysToDotStrings resourceSearchFields
+      limit = @_extractLimit req.query
+      select = @_extractModelSelectFields req.query
+      searchFields = @_selectValidResourceSearchFields req.query
 
       queryPromises = []
       modelQuery = @Model.find()
-      for resourceField, value of dotSearchFields
-        if modelField = @schema[resourceField].$field
-          modelQuery = modelQuery.where(modelField).equals value
-        else if @schema[resourceField].$find and resourceSearchFields[resourceField]
-          modelFinder = @schema[resourceField].$find
-          searchValue = resourceSearchFields[resourceField]
+      for searchField, value of searchFields
+        if @schema[searchField].$field
+          modelQuery.where(@schema[searchField].$field).equals value
+        else if @schema[searchField].$find
           deferred = q.defer()
-          modelFinder(searchValue, modelQuery, deferred.makeNodeResolver())
+          @schema[searchField].$find(value, modelQuery, deferred.makeNodeResolver())
           queryPromises.push(deferred.promise)
 
       q.all(queryPromises).then =>
         modelQuery.select(select) if select?
         modelQuery.limit(limit) if limit?
         modelQuery.exec (err, modelsFound) =>
+          console.log {modelsFound}
           res.send 400, err if err
-          resourcePromises = modelsFound.map (modelFound) =>
-            @_createResourceFromModelPromise(modelFound, resourceSearchFields)
-          q.all(resourcePromises).then (resources) =>
+          resources = modelsFound.map (modelFound) =>
+            @_createResourceFromModel(modelFound, searchFields)
+          @_resolveResourceGetsPromise(resources, req.query).then =>
             res.send resources
 
   show: (paramId) =>
     (req, res, next) =>
       id = req.params[paramId]
-      select = @_extractModelSelectFieldsFromQuery req.query
+      select = @_extractModelSelectFields req.query
 
       modelQuery = @Model.findById(id)
-      modelQuery = modelQuery.select(select) if select?
+      modelQuery.select(select) if select?
       modelQuery.exec (err, modelFound) =>
         if err
           return res.status(400).send err
         if not modelFound?
           return res.status(404).send "No #{paramId} found with id #{id}"
 
-        @_createResourceFromModelPromise(modelFound).then (resource) ->
-          res.send resource
+        resource = @_createResourceFromModel(modelFound)
+        res.send resource
 
   create: ->
     (req, res, next) =>
@@ -74,8 +72,8 @@ module.exports = class RestfulResource
       model = new @Model(newModelData)
       model.save (err, modelSaved) =>
         res.send 400, err if err
-        @_createResourceFromModelPromise(modelSaved).then (resource) ->
-          res.status(201).send resource
+        resource = @_createResourceFromModel(modelSaved)
+        res.status(201).send resource
 
   update: (paramId) ->
     (req, res, next) =>
@@ -87,30 +85,39 @@ module.exports = class RestfulResource
       @Model.findByIdAndUpdate id, newModelData, (err, modelUpdated) =>
         res.send 400, err if err
         res.send 404, 'resource not found' if !modelUpdated
-        @_createResourceFromModelPromise(modelUpdated).then (resource) ->
-          res.status(200).send resource
+        resource = @_createResourceFromModel(modelUpdated)
+        res.status(200).send resource
 
   send: (req, res) =>
     res.body ?= {}
     res.send res.body
 
-  _createResourceFromModelPromise: (model, queryParams) =>
-    deferred = q.defer()
+  _createResourceFromModel: (model, queryParams) =>
     resource = {}
     waitingCount = 0
     for resourceField, config of @schema
       if config.$field
         value = dot.get model, config.$field
         dot.set(resource, resourceField, value) if value
-      else if config.$get and typeof config.$get is 'function'
-        waitingCount++
-        fieldGetter = config.$get
-        fieldGetter model, queryParams, (err, value) ->
-          dot.set(resource, resourceField, value) if value
-          waitingCount--
-          deferred.resolve(resource) if waitingCount is 0
-    deferred.resolve(resource) if waitingCount is 0
-    return deferred.promise
+    resource
+
+  _resolveResourceGetsPromise: (resources, queryParams) =>
+    getPromises = []
+    for resourceField, config of @schema
+      if config.$get
+        d = q.defer()
+        config.$get(resources, queryParams, (err, results) -> d.resolve())
+        getPromises.push d.promise
+    return q.all getPromises
+
+    getPromises = resources
+    resource = {}
+    waitingCount = 0
+    for resourceField, config of @schema
+      if config.$field
+        value = dot.get model, config.$field
+        dot.set(resource, resourceField, value) if value
+    resource
 
   _createModelFromResource: (resource) =>
     model = {}
@@ -120,12 +127,12 @@ module.exports = class RestfulResource
         dot.set(model, config.$field, value) if value
     model
 
-  _extractLimitFromQuery: (query) =>
+  _extractLimit: (query) =>
     limit = query.$limit ? 100
     delete query.$limit
     limit
 
-  _extractModelSelectFieldsFromQuery: (query) =>
+  _extractModelSelectFields: (query) =>
     [resourceFields, modelFields] = @_getResourceAndModelFields()
     select = query.$select
     if select
@@ -138,14 +145,14 @@ module.exports = class RestfulResource
     delete query.$select
     modelSelectFields
 
-  _selectValidResourceSearchFieldsFromQuery: (query) =>
+  _selectValidResourceSearchFields: (query) =>
     queryDotString = @_convertKeysToDotStrings query
     [resourceFields, modelFields] = @_getResourceAndModelFields()
     validFields = {}
     for field, value of queryDotString
       if field in resourceFields
         dot.set validFields, field, value
-    validFields
+    @_convertKeysToDotStrings validFields
 
   _convertKeysToDotStrings: (obj) =>
     resevedKeywords = ['$find', '$get', '$set', '$model', '$field']
