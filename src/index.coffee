@@ -25,31 +25,56 @@ module.exports = class ResourceSchema
     else
       @schema = @_getSchemaFromModel(@Model)
 
+    if @schema._id and @schema._id.$field isnt '_id'
+      console.log 'TEST', typeof @schema._id, @schema._id.$field isnt '_id'
+      @isAggregate = true
+
   index: ->
     (req, res, next) =>
       limit = @_extractLimit req.query
       select = @_extractModelSelectFields req.query
       searchFields = @_selectValidResourceSearchFields req.query
 
-      queryPromises = []
-      modelQuery = @Model.find()
-      for searchField, value of searchFields
-        if @schema[searchField].$field
-          modelQuery.where(@schema[searchField].$field).equals value
-        else if @schema[searchField].$find
-          deferred = q.defer()
-          @schema[searchField].$find(value, modelQuery, deferred.makeNodeResolver())
-          queryPromises.push(deferred.promise)
+      if @isAggregate
+        console.log 'isAggregate', @_getGroupQuery()
+        console.log {searchFields}
+        # TODO: promises everywhere
+        # TODO: dynamic finders
+        @Model.count().exec (err, result) ->
+          console.log {modelCount: result}
 
-      q.all(queryPromises).then =>
-        modelQuery.select(select) if select?
-        modelQuery.limit(limit) if limit?
-        modelQuery.exec (err, modelsFound) =>
-          res.send 400, err if err
-          resources = modelsFound.map (modelFound) =>
-            @_createResourceFromModel(modelFound, searchFields)
-          @_resolveResourceGetPromises(resources, modelsFound, req.query).then =>
-            res.send resources
+        @Model.aggregate()
+          .group(@_getGroupQuery())
+          .exec (err, modelsFound) =>
+            console.log 'modelsFound', modelsFound
+            res.send 400, err if err
+            # TODO: extract this into function
+            resources = modelsFound.map (modelFound) =>
+              @_createResourceFromModel(modelFound, searchFields)
+            console.log {resources}
+            @_resolveResourceGetPromises(resources, modelsFound, req.query).then =>
+              res.send resources
+
+      if not @isAggregate
+        queryPromises = []
+        modelQuery = @Model.find()
+        for searchField, value of searchFields
+          if @schema[searchField].$field
+            modelQuery.where(@schema[searchField].$field).equals value
+          else if @schema[searchField].$find
+            deferred = q.defer()
+            @schema[searchField].$find(value, modelQuery, deferred.makeNodeResolver())
+            queryPromises.push(deferred.promise)
+
+        q.all(queryPromises).then =>
+          modelQuery.select(select) if select?
+          modelQuery.limit(limit) if limit?
+          modelQuery.exec (err, modelsFound) =>
+            res.send 400, err if err
+            resources = modelsFound.map (modelFound) =>
+              @_createResourceFromModel(modelFound, searchFields)
+            @_resolveResourceGetPromises(resources, modelsFound, req.query).then =>
+              res.send resources
 
   show: (paramId) =>
     (req, res, next) =>
@@ -102,7 +127,10 @@ module.exports = class ResourceSchema
     for resourceField, config of @schema
       if config.$field
         value = dot.get model, config.$field
-        dot.set(resource, resourceField, value) if value
+      # TODO: helper for this
+      if config.$get and typeof config.$get is 'object'
+        value = model[resourceField]
+      dot.set(resource, resourceField, value) if value
     resource
 
   _resolveResourceSetPromises: (resource, model, queryParams) =>
@@ -117,11 +145,27 @@ module.exports = class ResourceSchema
   _resolveResourceGetPromises: (resources, models, queryParams) =>
     getPromises = []
     for resourceField, config of @schema
-      if config.$get
+      if config.$get and typeof config.$get is 'function'
         d = q.defer()
         config.$get(resources, models, queryParams, (err, results) -> d.resolve())
         getPromises.push d.promise
     return q.all getPromises
+
+  _getGroupQuery: =>
+    groupQuery = {}
+    for field, config of @schema
+      if field is '_id'
+        if config.$field
+          groupQuery._id = '$' +  config.$field
+        else
+          for k, v of config
+            groupQuery._id = {}
+            groupQuery._id[k] = '$' +  v.$field
+      else if config.$field
+        groupQuery[field] = $first: '$' + config.$field
+      else if config.$get and typeof config.$get is 'object'
+        groupQuery[field] = config.$get
+    groupQuery
 
   _createModelFromResource: (resource) =>
     model = {}
