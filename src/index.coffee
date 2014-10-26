@@ -34,7 +34,8 @@ module.exports = class ResourceSchema
         resources = modelsFound.map (modelFound) =>
           @_createResourceFromModel(modelFound, searchFields)
         @_resolveResourceGetPromises(resources, modelsFound, req.query).then =>
-          res.send resources
+          res.body = resources
+          next()
 
       limit = @_extractLimit req.query
       select = @_extractModelSelectFields req.query
@@ -78,7 +79,8 @@ module.exports = class ResourceSchema
 
         resource = @_createResourceFromModel(modelFound)
         @_resolveResourceGetPromises([resource], [modelFound], req.query).then =>
-          res.send resource
+          res.body = resource
+          next()
 
   create: ->
     (req, res, next) =>
@@ -87,7 +89,9 @@ module.exports = class ResourceSchema
       model.save (err, modelSaved) =>
         res.send 400, err if err
         resource = @_createResourceFromModel(modelSaved)
-        res.status(201).send resource
+        res.status(201)
+        res.body = resource
+        next()
 
   update: (paramId) ->
     (req, res, next) =>
@@ -102,7 +106,9 @@ module.exports = class ResourceSchema
           res.send 400, err if err
           res.send 404, 'resource not found' if !modelUpdated
           resource = @_createResourceFromModel(modelUpdated)
-          res.status(200).send resource
+          res.status(200)
+          res.body = resource
+          next()
 
   send: (req, res) =>
     res.body ?= {}
