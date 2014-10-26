@@ -26,38 +26,30 @@ module.exports = class ResourceSchema
       @schema = @_getSchemaFromModel(@Model)
 
     if @schema._id and @schema._id.$field isnt '_id'
-      console.log 'TEST', typeof @schema._id, @schema._id.$field isnt '_id'
       @isAggregate = true
 
   index: ->
     (req, res, next) =>
+      sendResources = (modelsFound) =>
+        resources = modelsFound.map (modelFound) =>
+          @_createResourceFromModel(modelFound, searchFields)
+        @_resolveResourceGetPromises(resources, modelsFound, req.query).then =>
+          res.send resources
+
       limit = @_extractLimit req.query
       select = @_extractModelSelectFields req.query
       searchFields = @_selectValidResourceSearchFields req.query
 
       if @isAggregate
-        console.log 'isAggregate', @_getGroupQuery()
-        console.log {searchFields}
-        # TODO: promises everywhere
-        # TODO: dynamic finders
-        @Model.count().exec (err, result) ->
-          console.log {modelCount: result}
-
         @Model.aggregate()
+          .match(searchFields)
           .group(@_getGroupQuery())
-          .exec (err, modelsFound) =>
-            console.log 'modelsFound', modelsFound
-            res.send 400, err if err
-            # TODO: extract this into function
-            resources = modelsFound.map (modelFound) =>
-              @_createResourceFromModel(modelFound, searchFields)
-            console.log {resources}
-            @_resolveResourceGetPromises(resources, modelsFound, req.query).then =>
-              res.send resources
+          .exec().then sendResources
 
       if not @isAggregate
         queryPromises = []
         modelQuery = @Model.find()
+
         for searchField, value of searchFields
           if @schema[searchField].$field
             modelQuery.where(@schema[searchField].$field).equals value
@@ -69,12 +61,7 @@ module.exports = class ResourceSchema
         q.all(queryPromises).then =>
           modelQuery.select(select) if select?
           modelQuery.limit(limit) if limit?
-          modelQuery.exec (err, modelsFound) =>
-            res.send 400, err if err
-            resources = modelsFound.map (modelFound) =>
-              @_createResourceFromModel(modelFound, searchFields)
-            @_resolveResourceGetPromises(resources, modelsFound, req.query).then =>
-              res.send resources
+          modelQuery.exec().then sendResources
 
   show: (paramId) =>
     (req, res, next) =>

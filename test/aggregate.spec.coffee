@@ -35,87 +35,44 @@ describe 'aggregate resource', ->
         expect(response.body[1].total).to.equal 3
         expect(response.body[0].total).to.equal 1
 
-    # describe 'search fields', ->
-    #   describe 'single search field', ->
-    #     before fibrous ->
-    #       Model.sync.remove()
-    #       targetId = new mongoose.Types.ObjectId()
-    #       Model.sync.create name: 'test1'
-    #       Model.sync.create name: 'test2'
-    #
-    #       response = request.sync.get
-    #         url: 'http://127.0.0.1:4000/resource?name=test1',
-    #         json: true
-    #
-    #     it 'filters by the param', ->
-    #       expect(response.body.length).to.equal 1
-    #       expect(response.body[0].name).to.equal 'test1'
-    #
-    #   describe 'nested search field', ->
-    #     before fibrous ->
-    #       Model.sync.remove()
-    #       targetId = new mongoose.Types.ObjectId()
-    #       Model.sync.create product: price: 20
-    #       Model.sync.create product: price: 25
-    #
-    #       response = request.sync.get
-    #         url: 'http://127.0.0.1:4000/resource?product[price]=25',
-    #         json: true
-    #
-    #     it 'filters by the field', ->
-    #       expect(response.body.length).to.equal 1
-    #       expect(response.body[0].product.price).to.equal 25
-    #
-    #   describe 'renamed search field', ->
-    #     before fibrous ->
-    #       Model.sync.remove()
-    #       targetId = new mongoose.Types.ObjectId()
-    #       Model.sync.create product: name: 'apples'
-    #       Model.sync.create product: name: 'peaches'
-    #
-    #       response = request.sync.get
-    #         url: 'http://127.0.0.1:4000/resource?productName=apples',
-    #         json: true
-    #
-    #     it 'filters by the field, and returns the resource with the renamed field', ->
-    #       expect(response.body.length).to.equal 1
-    #       expect(response.body[0].productName).to.equal 'apples'
-    #
-    #   xdescribe 'invalid search field', ->
-    #     before fibrous ->
-    #       Model.sync.remove()
-    #       targetId = new mongoose.Types.ObjectId()
-    #       Model.sync.create product: name: 'apples'
-    #       Model.sync.create product: name: 'peaches'
-    #
-    #       response = request.sync.get
-    #         url: 'http://127.0.0.1:4000/resource?productType=fruit',
-    #         json: true
-    #
-    #     it 'returns an empty array', ->
-    #       expect(response.body.length).to.equal 0
-    #
-    # describe 'dynamic search field', ->
-    #   {model} = {}
-    #   before fibrous ->
-    #     ParentModel.sync.remove()
-    #     Model.sync.remove()
-    #     model1 = Model.sync.create name: 'foo'
-    #     model2 = Model.sync.create name: 'bar'
-    #     model3 = Model.sync.create name: 'baz'
-    #     parentModel = ParentModel.sync.create
-    #       name: 'banana'
-    #       modelIds: [model1._id, model2._id]
-    #
-    #   it 'returns only the specified fields in the dynamic search', fibrous ->
-    #     response = request.sync.get
-    #       url: 'http://127.0.0.1:4000/resource?parentName=banana',
-    #       json: true
-    #
-    #     expect(response.statusCode).to.equal 200
-    #     expect(response.body.length).to.equal 2
-    #     expect(response.body[0].name).to.equal 'foo'
-    #     expect(response.body[1].name).to.equal 'bar'
+    describe 'search fields', ->
+      describe 'single search field', ->
+        before fibrous ->
+          Model.sync.remove()
+          Model.sync.create name: 'test1'
+          Model.sync.create name: 'test1'
+          Model.sync.create name: 'test1'
+          Model.sync.create name: 'test2'
+          response = request.sync.get
+            url: 'http://127.0.0.1:4000/resource_aggregate?name=test1',
+            json: true
+
+        it 'filters by the param', ->
+          expect(response.body.length).to.equal 1
+          expect(response.body[0].name).to.equal 'test1'
+          expect(response.body[0].total).to.equal 3
+
+    describe 'dynamic search field', ->
+      {model} = {}
+      before fibrous ->
+        ParentModel.sync.remove()
+        Model.sync.remove()
+        model1 = Model.sync.create name: 'foo'
+        model2 = Model.sync.create name: 'bar'
+        model3 = Model.sync.create name: 'baz'
+        parentModel = ParentModel.sync.create
+          name: 'banana'
+          modelIds: [model1._id, model2._id]
+
+        response = request.sync.get
+          url: 'http://127.0.0.1:4000/resource_aggregate?parentName=banana',
+          json: true
+
+      it 'returns only the specified fields in the dynamic search', fibrous ->
+        expect(response.statusCode).to.equal 200
+        expect(response.body.length).to.equal 2
+        expect(response.body[0].name).to.equal 'foo'
+        expect(response.body[1].name).to.equal 'bar'
     #
     # xdescribe 'dynamic get field', ->
     #   {model} = {}
