@@ -34,8 +34,8 @@ module.exports = class ResourceSchema
           res.body = resources
           next()
 
-      limit = @_extractLimit req.query
-      select = @_extractModelSelectFields req.query
+      limit = @_getLimit req.query
+      select = @getModelSelectFields req.query
       searchFields = @_selectValidResourceSearchFields req.query
 
       if @options.aggregate
@@ -66,7 +66,7 @@ module.exports = class ResourceSchema
   show: (paramId) =>
     (req, res, next) =>
       id = req.params[paramId]
-      select = @_extractModelSelectFields req.query
+      select = @getModelSelectFields req.query
 
       modelQuery = @Model.findById(id)
       modelQuery.select(select) if select?
@@ -174,12 +174,10 @@ module.exports = class ResourceSchema
         dot.set(model, config.$field, value) if value
     model
 
-  _extractLimit: (query) =>
-    limit = query.$limit ? @options.defaultLimit
-    delete query.$limit
-    limit
+  _getLimit: (query) =>
+    query.$limit ? @options.defaultLimit
 
-  _extractModelSelectFields: (query) =>
+  getModelSelectFields: (query) =>
     [resourceFields, modelFields] = @_getResourceAndModelFields()
     select = query.$select
     if select
@@ -189,7 +187,6 @@ module.exports = class ResourceSchema
       modelSelectFields = modelSelectFields.join(' ')
     else
       modelSelectFields = modelFields.join(' ')
-    delete query.$select
     modelSelectFields
 
   _selectValidResourceSearchFields: (query) =>

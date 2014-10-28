@@ -154,7 +154,6 @@ describe '.index()', ->
         url: 'http://127.0.0.1:4000/resource_config',
         json: true
 
-      console.log {RESPONSE: response.body}
 
       expect(response.statusCode).to.equal 200
       expect(response.body.length).to.equal 1
@@ -182,7 +181,6 @@ describe '.index()', ->
         url: 'http://127.0.0.1:4000/resource_config',
         json: true
 
-      console.log {RESPONSE: response.body}
 
       expect(response.statusCode).to.equal 200
       expect(response.body.length).to.equal 2

@@ -32,7 +32,6 @@ describe '.show()', ->
       response = request.sync.get
         url: "http://127.0.0.1:4000/resource/#{model._id}"
         json: true
-      console.log {response:response.body}
       expect(response.statusCode).to.equal 200
       expect(response.body.parentName).to.equal 'parent'
 
