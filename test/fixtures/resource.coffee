@@ -14,9 +14,9 @@ resource = new ResourceSchema Model,
   normal:
     nesting: 'normal.nesting'
   parentName:
-    $find: fibrous (searchValue, modelQuery) ->
+    $find: fibrous (searchValue) ->
       parentModel = ParentModel.sync.findOne(name: searchValue)
-      modelQuery.find().where('_id').in(parentModel.modelIds)
+      return {_id: $in: parentModel.modelIds}
     $get: fibrous (resourcesToReturn, models, queryParams) ->
       parentModelsByChildId = getParentModelsByChildId.sync(models)
       resourcesToReturn.forEach (foundResource) ->

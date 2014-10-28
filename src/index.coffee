@@ -29,39 +29,25 @@ module.exports = class ResourceSchema
     (req, res, next) =>
       sendResources = (modelsFound) =>
         resources = modelsFound.map (modelFound) =>
-          @_createResourceFromModel(modelFound, searchFields)
+          @_createResourceFromModel(modelFound)
         @_resolveResourceGetPromises(resources, modelsFound, req.query).then =>
           res.body = resources
           next()
 
       limit = @_getLimit req.query
       select = @getModelSelectFields req.query
-      searchFields = @_selectValidResourceSearchFields req.query
+      @_getQueryConfigPromise(req.query).then (queryConfig) =>
+        if @options.aggregate
+          modelQuery = @Model.aggregate()
+          modelQuery.match(queryConfig)
+          modelQuery.group(@_getGroupQuery())
 
-      if @options.aggregate
-        @Model.aggregate()
-          .match(searchFields)
-          .group(@_getGroupQuery())
-          .exec().then sendResources
-
-      if not @options.aggregate
-        queryPromises = []
-
-        defaultQuery = @options.defaultQuery or {}
-        modelQuery = @Model.find(defaultQuery)
-
-        for searchField, value of searchFields
-          if @schema[searchField].$field
-            modelQuery.where(@schema[searchField].$field).equals value
-          else if @schema[searchField].$find
-            deferred = q.defer()
-            @schema[searchField].$find(value, modelQuery, deferred.makeNodeResolver())
-            queryPromises.push(deferred.promise)
-
-        q.all(queryPromises).then =>
+        if not @options.aggregate
+          modelQuery = @Model.find(queryConfig)
           modelQuery.select(select) if select?
-          modelQuery.limit(limit) if limit?
-          modelQuery.exec().then sendResources
+
+        modelQuery.limit(limit) if limit?
+        modelQuery.exec().then sendResources
 
   show: (paramId) =>
     (req, res, next) =>
@@ -113,12 +99,32 @@ module.exports = class ResourceSchema
     res.body ?= {}
     res.send res.body
 
-  _createResourceFromModel: (model, queryParams) =>
-    resource = {}
-    waitingCount = 0
+  _getQueryConfigPromise: (requestQuery) =>
+    modelQuery = @options.defaultQuery or {}
+    deferred = q.defer()
+    queryPromises = []
+    resourceSearchFields = @_selectValidResourceSearchFields requestQuery
 
+    for resourceField, value of resourceSearchFields
+      if @schema[resourceField].$field
+        modelQuery[@schema[resourceField].$field] = value
+      else if @schema[resourceField].$find
+        d = q.defer()
+        @schema[resourceField].$find value, (err, query) ->
+          _(modelQuery).extend(query)
+          d.resolve()
+        queryPromises.push(d.promise)
+
+    q.all(queryPromises).then ->
+      deferred.resolve(modelQuery)
+
+    deferred.promise
+
+  _createResourceFromModel: (model) =>
+    resource = {}
     #set _id
     if @options.aggregate?.length
+      delete model._id
       aggregateValues = @options.aggregate.map (aggregateField) ->
         dot.get model, aggregateField
       resource._id = aggregateValues.join('|')
