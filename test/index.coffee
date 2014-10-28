@@ -84,7 +84,7 @@ describe '.index()', ->
       it 'returns an empty array', ->
         expect(response.body.length).to.equal 0
 
-  describe 'dynamic search field', ->
+  describe 'dynamic $find field', ->
     {model} = {}
     before fibrous ->
       ParentModel.sync.remove()
@@ -106,7 +106,7 @@ describe '.index()', ->
       expect(response.body[0].name).to.equal 'foo'
       expect(response.body[1].name).to.equal 'bar'
 
-  xdescribe 'dynamic get field', ->
+  describe 'dynamic $get field', ->
     {model} = {}
     before fibrous ->
       ParentModel.sync.remove()
@@ -131,6 +131,34 @@ describe '.index()', ->
       expect(response.body[0].parentName).to.equal 'banana'
       expect(response.body[1].parentName).to.equal 'banana'
       expect(response.body[2].parentName).to.equal 'orange'
+
+  describe 'default query', ->
+    {model} = {}
+    before fibrous ->
+      ParentModel.sync.remove()
+      Model.sync.remove()
+
+      # default limit is after 2014-10-05
+      model1 = Model.sync.create
+        name: 'foo'
+        day: '2014-09-18'
+      model2 = Model.sync.create
+        name: 'bar'
+        day: '2014-09-27'
+      model3 = Model.sync.create
+        name: 'baz'
+        day: '2014-10-05'
+
+    it 'limits by the default query specified in the config', fibrous ->
+      response = request.sync.get
+        url: 'http://127.0.0.1:4000/resource_config',
+        json: true
+
+      console.log {RESPONSE: response.body}
+
+      expect(response.statusCode).to.equal 200
+      expect(response.body.length).to.equal 1
+      expect(response.body[0].day).to.equal '2014-10-05'
 
   describe '$limit', ->
     before fibrous ->

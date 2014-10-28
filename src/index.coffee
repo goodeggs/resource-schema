@@ -46,7 +46,9 @@ module.exports = class ResourceSchema
 
       if not @options.aggregate
         queryPromises = []
-        modelQuery = @Model.find()
+
+        defaultQuery = @options.defaultQuery or {}
+        modelQuery = @Model.find(defaultQuery)
 
         for searchField, value of searchFields
           if @schema[searchField].$field
