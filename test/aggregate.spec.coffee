@@ -52,7 +52,7 @@ describe 'aggregate resource', ->
           expect(response.body[0].name).to.equal 'test1'
           expect(response.body[0].total).to.equal 3
 
-    describe 'dynamic search field', ->
+    xdescribe 'dynamic search field', ->
       {model} = {}
       before fibrous ->
         ParentModel.sync.remove()

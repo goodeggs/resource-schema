@@ -6,16 +6,14 @@ _ = require 'underscore'
 ResourceSchema = require '../..'
 express = require 'express'
 
-schemaOptions =
-  aggregate: ['name']
-
-schema =
+resource = new ResourceSchema Model, {
+  _id: '_id'
   name: 'name'
-  total:
-    $get: $sum: 1
-  productName: 'product.name'
-
-resource = new ResourceSchema Model, schema, schemaOptions
+  lastName: 'lastName'
+  total: $get: $sum: 1
+}, {
+  aggregate: ['name']
+}
 
 module.exports = app = express()
 

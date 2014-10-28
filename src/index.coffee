@@ -19,14 +19,11 @@ normalized schema:
 ###
 
 module.exports = class ResourceSchema
-  constructor: (@Model, schema) ->
+  constructor: (@Model, schema, @options = {}) ->
     if schema
       @schema = @_normalizeSchema(schema)
     else
       @schema = @_getSchemaFromModel(@Model)
-
-    if @schema._id and @schema._id.$field isnt '_id'
-      @isAggregate = true
 
   index: ->
     (req, res, next) =>
@@ -41,13 +38,13 @@ module.exports = class ResourceSchema
       select = @_extractModelSelectFields req.query
       searchFields = @_selectValidResourceSearchFields req.query
 
-      if @isAggregate
+      if @options.aggregate
         @Model.aggregate()
           .match(searchFields)
           .group(@_getGroupQuery())
           .exec().then sendResources
 
-      if not @isAggregate
+      if not @options.aggregate
         queryPromises = []
         modelQuery = @Model.find()
 
@@ -146,15 +143,14 @@ module.exports = class ResourceSchema
 
   _getGroupQuery: =>
     groupQuery = {}
+    #set _id
+    groupQuery._id = {}
+    for aggregateField in @options.aggregate
+      groupQuery._id[aggregateField.replace('.', '')] = '$' + aggregateField
+
+    #set all other fields
     for field, config of @schema
-      if field is '_id'
-        if config.$field
-          groupQuery._id = '$' +  config.$field
-        else
-          for k, v of config
-            groupQuery._id = {}
-            groupQuery._id[k] = '$' +  v.$field
-      else if config.$field
+      if config.$field
         groupQuery[field] = $first: '$' + config.$field
       else if config.$get and typeof config.$get is 'object'
         groupQuery[field] = config.$get
