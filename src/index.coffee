@@ -114,6 +114,14 @@ module.exports = class ResourceSchema
   _createResourceFromModel: (model, queryParams) =>
     resource = {}
     waitingCount = 0
+
+    #set _id
+    if @options.aggregate?.length
+      aggregateValues = @options.aggregate.map (aggregateField) ->
+        dot.get model, aggregateField
+      resource._id = aggregateValues.join('|')
+
+    #set all other fields
     for resourceField, config of @schema
       if config.$field
         value = dot.get model, config.$field
