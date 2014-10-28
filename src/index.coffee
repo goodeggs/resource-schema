@@ -29,13 +29,13 @@ module.exports = class ResourceSchema
     (req, res, next) =>
       sendResources = (modelsFound) =>
         resources = modelsFound.map (modelFound) =>
-          @_createResourceFromModel(modelFound)
+          @_createResourceFromModel(modelFound, req.query.$select)
         @_resolveResourceGetPromises(resources, modelsFound, req.query).then =>
           res.body = resources
           next()
 
       limit = @_getLimit req.query
-      select = @getModelSelectFields req.query
+      modelSelect = @getModelSelectFields req.query
       @_getQueryConfigPromise(req.query).then (queryConfig) =>
         if @options.aggregate
           modelQuery = @Model.aggregate()
@@ -44,7 +44,7 @@ module.exports = class ResourceSchema
 
         if not @options.aggregate
           modelQuery = @Model.find(queryConfig)
-          modelQuery.select(select) if select?
+          modelQuery.select(modelSelect) if select? # reduce query if possible
 
         modelQuery.limit(limit) if limit?
         modelQuery.exec().then sendResources
@@ -120,8 +120,10 @@ module.exports = class ResourceSchema
 
     deferred.promise
 
-  _createResourceFromModel: (model) =>
+  _createResourceFromModel: (model, resourceSelectFields) =>
     resource = {}
+
+    resourceSelectFields = resourceSelectFields.split(' ') if typeof resourceSelectFields is 'string'
     #set _id
     if @options.aggregate?.length
       delete model._id
@@ -131,13 +133,15 @@ module.exports = class ResourceSchema
 
     #set all other fields
     for resourceField, config of @schema
-      if config.$field
-        value = dot.get model, config.$field
-        dot.set(resource, resourceField, value) if value
-      # TODO: helper for this
-      if config.$get and typeof config.$get is 'object'
-        value = model[resourceField]
-        dot.set(resource, resourceField, value) if value
+      # TODO set default select to all fields?
+      if fieldIsSelectable = !resourceSelectFields? or resourceField in resourceSelectFields
+        if config.$field
+          value = dot.get model, config.$field
+          dot.set(resource, resourceField, value) if value
+        # TODO: helper for this
+        if config.$get and typeof config.$get is 'object'
+          value = model[resourceField]
+          dot.set(resource, resourceField, value) if value
     resource
 
   _resolveResourceSetPromises: (resource, model, queryParams) =>
