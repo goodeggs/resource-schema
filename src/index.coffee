@@ -175,7 +175,7 @@ module.exports = class ResourceSchema
     model
 
   _extractLimit: (query) =>
-    limit = query.$limit ? 100
+    limit = query.$limit ? @options.defaultLimit
     delete query.$limit
     limit
 

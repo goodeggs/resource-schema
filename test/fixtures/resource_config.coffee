@@ -14,7 +14,7 @@ schema =
 schemaConfig =
   defaultQuery:
     day: $gte: '2014-10-01'
-  defaultLimit: 10
+  defaultLimit: 2
 
 resource = new ResourceSchema Model, schema, schemaConfig
 

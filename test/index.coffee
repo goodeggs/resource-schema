@@ -132,7 +132,7 @@ describe '.index()', ->
       expect(response.body[1].parentName).to.equal 'banana'
       expect(response.body[2].parentName).to.equal 'orange'
 
-  describe 'default query', ->
+  describe 'options.defaultQuery', ->
     {model} = {}
     before fibrous ->
       ParentModel.sync.remove()
@@ -149,7 +149,7 @@ describe '.index()', ->
         name: 'baz'
         day: '2014-10-05'
 
-    it 'limits by the default query specified in the config', fibrous ->
+    it 'applies default query, if not overwritten', fibrous ->
       response = request.sync.get
         url: 'http://127.0.0.1:4000/resource_config',
         json: true
@@ -159,6 +159,33 @@ describe '.index()', ->
       expect(response.statusCode).to.equal 200
       expect(response.body.length).to.equal 1
       expect(response.body[0].day).to.equal '2014-10-05'
+
+  describe 'options.defaultLimit', ->
+    {model} = {}
+    before fibrous ->
+      ParentModel.sync.remove()
+      Model.sync.remove()
+
+      # default limit is after 2014-10-05
+      model1 = Model.sync.create
+        name: 'foo'
+        day: '2014-10-05'
+      model2 = Model.sync.create
+        name: 'bar'
+        day: '2014-10-05'
+      model3 = Model.sync.create
+        name: 'baz'
+        day: '2014-10-05'
+
+    it 'uses default limit', fibrous ->
+      response = request.sync.get
+        url: 'http://127.0.0.1:4000/resource_config',
+        json: true
+
+      console.log {RESPONSE: response.body}
+
+      expect(response.statusCode).to.equal 200
+      expect(response.body.length).to.equal 2
 
   describe '$limit', ->
     before fibrous ->
