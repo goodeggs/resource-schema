@@ -79,6 +79,7 @@ describe 'aggregate resource', ->
         console.log response.body
         expect(response.body.length).to.equal 2
         expect(response.body[0].name).to.equal 'bar'
+        expect(response.body[0].parentName).to.be.undefined
         expect(response.body[1].name).to.equal 'foo'
         expect(response.body[1].total).to.equal 1
 

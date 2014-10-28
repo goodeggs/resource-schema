@@ -133,10 +133,11 @@ module.exports = class ResourceSchema
     for resourceField, config of @schema
       if config.$field
         value = dot.get model, config.$field
+        dot.set(resource, resourceField, value) if value
       # TODO: helper for this
       if config.$get and typeof config.$get is 'object'
         value = model[resourceField]
-      dot.set(resource, resourceField, value) if value
+        dot.set(resource, resourceField, value) if value
     resource
 
   _resolveResourceSetPromises: (resource, model, queryParams) =>
