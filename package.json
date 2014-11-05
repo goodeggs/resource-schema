@@ -32,6 +32,10 @@
     "express": "^4.9.7",
     "request": "^2.45.0"
   },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/",
+    "always-auth": true
+  },
   "scripts": {
     "compile": "coffee --bare --compile --output lib/ src/",
     "build": "npm run compile",
