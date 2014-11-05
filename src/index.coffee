@@ -49,18 +49,21 @@ module.exports = class ResourceSchema
         modelQuery.limit(limit) if limit?
         modelQuery.exec().then sendResources
 
-  show: (paramId) =>
+  show: (paramId='_id') =>
     (req, res, next) =>
-      id = req.params[paramId]
       select = @getModelSelectFields req.query
 
-      modelQuery = @Model.findById(id)
+      idValue = req.params[paramId]
+      query = {}
+      query[paramId] = idValue
+
+      modelQuery = @Model.findOne(query)
       modelQuery.select(select) if select?
       modelQuery.exec (err, modelFound) =>
         if err
           return res.status(400).send err
         if not modelFound?
-          return res.status(404).send "No #{paramId} found with id #{id}"
+          return res.status(404).send "No #{paramId} found with id #{idValue}"
 
         resource = @_createResourceFromModel(modelFound)
         @_resolveResourceGetPromises([resource], [modelFound], req.query).then =>
@@ -78,16 +81,20 @@ module.exports = class ResourceSchema
         res.body = resource
         next()
 
-  update: (paramId) ->
+  update: (paramId='_id') ->
     (req, res, next) =>
-      id = req.params[paramId]
       newModelData = @_createModelFromResource req.body
+
+      idValue = req.params[paramId]
+      query = {}
+      query[paramId] = idValue
+
       # if using mongoose timestamps plugin:
       # since we are not updating an instance of mongoose, we need to manually add the updatedAt timestamp
       # newModelData.updatedAt = new Date() if newModelData.updatedAt
-      @Model.findById id, (err, modelFound) =>
+      @Model.findOne query, (err, modelFound) =>
         @_resolveResourceSetPromises(req.body, modelFound, {}).then =>
-        @Model.findByIdAndUpdate id, newModelData, (err, modelUpdated) =>
+        @Model.findOneAndUpdate query, newModelData, (err, modelUpdated) =>
           res.send 400, err if err
           res.send 404, 'resource not found' if !modelUpdated
           resource = @_createResourceFromModel(modelUpdated)
@@ -95,17 +102,20 @@ module.exports = class ResourceSchema
           res.body = resource
           next()
 
-  destroy: (paramId) ->
+  destroy: (paramId='_id') ->
     (req, res, next) =>
-      id = req.params[paramId]
-      @Model.findByIdAndRemove id, (err, removedInstance) =>
+      idValue = req.params[paramId]
+      query = {}
+      query[paramId] = idValue
+
+      @Model.findOneAndRemove query, (err, removedInstance) =>
         res.send 400, err if err
 
         if !removedInstance?
-          res.send(404, "Resource with id #{id} not found from #{@Model.modelName} collection")
+          res.send(404, "Resource with id #{idValue} not found from #{@Model.modelName} collection")
 
         res.status(204)
-        res.body = "Resource with id #{id} successfully deleted from #{@Model.modelName} collection"
+        res.body = "Resource with id #{idValue} successfully deleted from #{@Model.modelName} collection"
         next()
 
   send: (req, res) =>
