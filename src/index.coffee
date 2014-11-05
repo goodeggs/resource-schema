@@ -95,6 +95,19 @@ module.exports = class ResourceSchema
           res.body = resource
           next()
 
+  destroy: (paramId) ->
+    (req, res, next) =>
+      id = req.params[paramId]
+      @Model.findByIdAndRemove id, (err, removedInstance) =>
+        res.send 400, err if err
+
+        if !removedInstance?
+          res.send(404, "Resource with id #{id} not found from #{@Model.modelName} collection")
+
+        res.status(204)
+        res.body = "Resource with id #{id} successfully deleted from #{@Model.modelName} collection"
+        next()
+
   send: (req, res) =>
     res.body ?= {}
     res.send res.body
