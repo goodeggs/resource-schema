@@ -7,7 +7,7 @@ ResourceSchema = require '../..'
 express = require 'express'
 
 schemaOptions =
-  aggregate: ['name']
+  groupBy: ['name']
 
 schema =
   name: 'name'

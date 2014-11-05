@@ -6,13 +6,13 @@ _ = require 'underscore'
 ResourceSchema = require '../..'
 express = require 'express'
 
+schemaOptions =
+  groupBy: ['name', 'lastName']
+
 schema =
   name: 'name'
   lastName: 'lastName'
   total: $get: $sum: 1
-
-schemaOptions =
-  aggregate: ['name', 'lastName']
 
 resource = new ResourceSchema Model, schema, schemaOptions
 

@@ -76,7 +76,6 @@ describe 'aggregate resource', ->
 
       it 'returns only the specified fields in the dynamic search', fibrous ->
         expect(response.statusCode).to.equal 200
-        console.log response.body
         expect(response.body.length).to.equal 2
         expect(response.body[0].name).to.equal 'bar'
         expect(response.body[0].parentName).to.be.undefined

@@ -37,12 +37,12 @@ module.exports = class ResourceSchema
       limit = @_getLimit req.query
       modelSelect = @getModelSelectFields req.query
       @_getQueryConfigPromise(req.query).then (queryConfig) =>
-        if @options.aggregate
+        if @options.groupBy
           modelQuery = @Model.aggregate()
           modelQuery.match(queryConfig)
           modelQuery.group(@_getGroupQuery())
 
-        if not @options.aggregate
+        if not @options.groupBy
           modelQuery = @Model.find(queryConfig)
           modelQuery.select(modelSelect) if select? # reduce query if possible
 
@@ -125,9 +125,9 @@ module.exports = class ResourceSchema
 
     resourceSelectFields = resourceSelectFields.split(' ') if typeof resourceSelectFields is 'string'
     #set _id
-    if @options.aggregate?.length
+    if @options.groupBy?.length
       delete model._id
-      aggregateValues = @options.aggregate.map (aggregateField) ->
+      aggregateValues = @options.groupBy.map (aggregateField) ->
         dot.get model, aggregateField
       resource._id = aggregateValues.join('|')
 
@@ -166,7 +166,7 @@ module.exports = class ResourceSchema
     groupQuery = {}
     #set _id
     groupQuery._id = {}
-    for aggregateField in @options.aggregate
+    for aggregateField in @options.groupBy
       groupQuery._id[aggregateField.replace('.', '')] = '$' + aggregateField
 
     #set all other fields
