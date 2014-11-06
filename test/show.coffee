@@ -62,7 +62,7 @@ describe '.show()', ->
 
       it 'selects from the available resource fields', ->
         expect(response.statusCode).to.equal 200
-        expect(response.body.name).to.equal 'test'
+        expect(response.body).to.deep.equal name: 'test'
         expect(response.body.product).to.be.undefined
 
     describe 'nested select', ->

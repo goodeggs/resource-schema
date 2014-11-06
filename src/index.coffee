@@ -26,7 +26,7 @@ module.exports = class ResourceSchema
       @schema = @_getSchemaFromModel(@Model)
 
   ###
-  Generate middleware to handle GET requests to resource
+  Generate middleware to handle GET requests for resource
   ###
   get: (paramId) ->
     if (paramId)
@@ -38,6 +38,7 @@ module.exports = class ResourceSchema
     sendResources = (err, modelsFound) =>
       resources = modelsFound.map (modelFound) =>
         @_createResourceFromModel(modelFound, req.query.$select)
+
       @_resolveResourceGetPromises(resources, modelsFound, req.query).then =>
         res.body = resources
         next()
@@ -75,13 +76,13 @@ module.exports = class ResourceSchema
         if not modelFound?
           return res.status(404).send "No #{paramId} found with id #{idValue}"
 
-        resource = @_createResourceFromModel(modelFound)
+        resource = @_createResourceFromModel(modelFound, req.query.$select)
         @_resolveResourceGetPromises([resource], [modelFound], req.query).then =>
           res.body = resource
           next()
 
   ###
-  Generate middleware to handle POST requests to resource
+  Generate middleware to handle POST requests for resource
   ###
   post: ->
     (req, res, next) =>
@@ -89,13 +90,13 @@ module.exports = class ResourceSchema
       model = new @Model(newModelData)
       model.save (err, modelSaved) =>
         res.send 400, err if err
-        resource = @_createResourceFromModel(modelSaved)
+        resource = @_createResourceFromModel(modelSaved, req.query.$select)
         res.status(201)
         res.body = resource
         next()
 
   ###
-  Generate middleware to handle PUT requests to resource
+  Generate middleware to handle PUT requests for resource
   ###
   put: (paramId) ->
     (req, res, next) =>
@@ -113,13 +114,13 @@ module.exports = class ResourceSchema
         @Model.findOneAndUpdate(query, newModelData).lean().exec (err, modelUpdated) =>
           res.send 400, err if err
           res.send 404, 'resource not found' if !modelUpdated
-          resource = @_createResourceFromModel(modelUpdated)
+          resource = @_createResourceFromModel(modelUpdated, req.query.$select)
           res.status(200)
           res.body = resource
           next()
 
   ###
-  Generate middleware to handle DELETE requests to resource
+  Generate middleware to handle DELETE requests for resource
   ###
   delete: (paramId) ->
     (req, res, next) =>
@@ -148,28 +149,30 @@ module.exports = class ResourceSchema
   Wait for all $find, and queryParams to resolve, and build the model query with the results
   ###
   _getQueryConfigPromise: (requestQuery) =>
-    modelQuery = @options.defaultQuery or {}
+    modelQuery = _.clone(@options.defaultQuery) or {}
     deferred = q.defer()
     queryPromises = []
     resourceSearchFields = @_selectValidResourceSearchFields requestQuery
     querySearchFields = @_selectValidQuerySearchFields requestQuery
 
-    for resourceField, value of resourceSearchFields
-      if @schema[resourceField].$field
-        modelQuery[@schema[resourceField].$field] = value
-      else if @schema[resourceField].$find
+    if resourceSearchFields
+      for resourceField, value of resourceSearchFields
+        if @schema[resourceField].$find
+          d = q.defer()
+          @schema[resourceField].$find value, (err, query) ->
+            _(modelQuery).extend(query)
+            d.resolve()
+          queryPromises.push(d.promise)
+        else if @schema[resourceField].$field
+          modelQuery[@schema[resourceField].$field] = value
+
+    if querySearchFields
+      for queryField, value of querySearchFields
         d = q.defer()
-        @schema[resourceField].$find value, (err, query) ->
+        @options.queryParams[queryField] value, (err, query) ->
           _(modelQuery).extend(query)
           d.resolve()
         queryPromises.push(d.promise)
-
-    for queryField, value of querySearchFields
-      d = q.defer()
-      @options.queryParams[queryField] value, (err, query) ->
-        _(modelQuery).extend(query)
-        d.resolve()
-      queryPromises.push(d.promise)
 
     q.all(queryPromises).then ->
       deferred.resolve(modelQuery)
@@ -201,7 +204,7 @@ module.exports = class ResourceSchema
       if fieldIsSelectable = !resourceSelectFields? or resourceField in resourceSelectFields
         if config.$field
           value = dot.get model, config.$field
-          dot.set(resource, resourceField, value) if value
+          dot.set(resource, resourceField, value)
         # TODO: helper for this
         if config.$get and typeof config.$get is 'object'
           value = model[resourceField]
@@ -260,7 +263,7 @@ module.exports = class ResourceSchema
   @returns [Number] Max number of resources to return in response
   ###
   _getLimit: (query) =>
-    query.$limit ? @options.defaultLimit
+    query.$limit or @options.defaultLimit or 100
 
   ###
   Get value to use for limiting query results
@@ -333,6 +336,8 @@ module.exports = class ResourceSchema
         if key in RESERVED_KEYWORDS
           dotKeys[current] ?= {}
           dotKeys[current][key] = value
+        else if Array.isArray value
+          dotKeys[newKey] = value
         else if value and typeof value is "object"
           dotStringify(value, newKey)
         else
@@ -343,7 +348,7 @@ module.exports = class ResourceSchema
   _getResourceAndModelFields: =>
     resourceFields = Object.keys @schema
     modelFields = resourceFields.map (resourceField) => @schema[resourceField].$field
-    [resourceFields, modelFields]
+    [_.compact(resourceFields), _.compact(modelFields)]
 
   _getSchemaFromModel: (Model) =>
     # Paths already in dot notation
