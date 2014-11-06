@@ -184,7 +184,7 @@ describe '.index()', ->
       expect(response.body.length).to.equal 1
       expect(response.body[0].day).to.equal '2014-10-05'
 
-  xdescribe 'options.queryParams', ->
+  describe 'options.queryParams', ->
     {model} = {}
     before fibrous ->
       Model.sync.remove()
@@ -201,14 +201,14 @@ describe '.index()', ->
         day: '2014-10-05'
 
     it 'applies default query, if not overwritten', fibrous ->
-      console.log {count: Model.sync.count()}
-      console.log {response: response.body}
       response = request.sync.get
         url: 'http://127.0.0.1:4000/resource_config?startDate=2014-09-27',
         json: true
 
       expect(response.statusCode).to.equal 200
       expect(response.body.length).to.equal 2
+      expect(response.body[0].day).to.equal '2014-09-27'
+      expect(response.body[1].day).to.equal '2014-10-05'
 
   describe 'options.defaultLimit', ->
     {model} = {}

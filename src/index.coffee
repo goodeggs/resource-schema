@@ -40,7 +40,6 @@ module.exports = class ResourceSchema
       limit = @_getLimit req.query
       modelSelect = @_getModelSelectFields req.query
       @_getQueryConfigPromise(req.query).then (queryConfig) =>
-        console.log {queryConfig}
         if @options.groupBy
           modelQuery = @Model.aggregate()
           modelQuery.match(queryConfig)
@@ -149,6 +148,7 @@ module.exports = class ResourceSchema
     deferred = q.defer()
     queryPromises = []
     resourceSearchFields = @_selectValidResourceSearchFields requestQuery
+    querySearchFields = @_selectValidQuerySearchFields requestQuery
 
     for resourceField, value of resourceSearchFields
       if @schema[resourceField].$field
@@ -159,6 +159,13 @@ module.exports = class ResourceSchema
           _(modelQuery).extend(query)
           d.resolve()
         queryPromises.push(d.promise)
+
+    for queryField, value of querySearchFields
+      d = q.defer()
+      @options.queryParams[queryField] value, (err, query) ->
+        _(modelQuery).extend(query)
+        d.resolve()
+      queryPromises.push(d.promise)
 
     q.all(queryPromises).then ->
       deferred.resolve(modelQuery)
@@ -283,8 +290,11 @@ module.exports = class ResourceSchema
 
   ###
   Select valid properties from query that can be used for filtering resources
+  @param [Object] query - query params from client
+  @returns [Object] valid query fields and their values
   ###
   _selectValidQuerySearchFields: (query) =>
+    return {} if not @options.queryParams
     queryDotString = @_convertKeysToDotStrings query
     queryParamFields = Object.keys @options.queryParams
     validFields = {}
@@ -295,6 +305,8 @@ module.exports = class ResourceSchema
 
   ###
   Select valid properties from query that can be used for filtering resources in the schema
+  @param [Object] query - query params from client
+  @returns [Object] valid resource search fields and their values
   ###
   _selectValidResourceSearchFields: (query) =>
     queryDotString = @_convertKeysToDotStrings query
@@ -306,7 +318,7 @@ module.exports = class ResourceSchema
     @_convertKeysToDotStrings validFields
 
   ###
-  Collapse all nested dot fields into standard format
+  Collapse all nested fields dot format
   @example {a: {b: 1}} -> {'a.b': 1}
   ###
   _convertKeysToDotStrings: (obj) =>
