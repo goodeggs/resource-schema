@@ -25,6 +25,9 @@ module.exports = class ResourceSchema
     else
       @schema = @_getSchemaFromModel(@Model)
 
+  ###
+  Generate middleware to handle GET requests to resource
+  ###
   index: ->
     (req, res, next) =>
       sendResources = (modelsFound) =>
@@ -35,7 +38,7 @@ module.exports = class ResourceSchema
           next()
 
       limit = @_getLimit req.query
-      modelSelect = @getModelSelectFields req.query
+      modelSelect = @_getModelSelectFields req.query
       @_getQueryConfigPromise(req.query).then (queryConfig) =>
         console.log {queryConfig}
         if @options.groupBy
@@ -50,9 +53,12 @@ module.exports = class ResourceSchema
         modelQuery.limit(limit) if limit?
         modelQuery.exec().then sendResources
 
+  ###
+  Generate middleware for GET requests to resource instance
+  ###
   show: (paramId='_id') =>
     (req, res, next) =>
-      select = @getModelSelectFields req.query
+      select = @_getModelSelectFields req.query
 
       idValue = req.params[paramId]
       query = {}
@@ -71,6 +77,9 @@ module.exports = class ResourceSchema
           res.body = resource
           next()
 
+  ###
+  Generate middleware to handle POST requests to resource
+  ###
   create: ->
     (req, res, next) =>
       newModelData = @_createModelFromResource req.body
@@ -82,6 +91,9 @@ module.exports = class ResourceSchema
         res.body = resource
         next()
 
+  ###
+  Generate middleware to handle PUT requests to resource
+  ###
   update: (paramId='_id') ->
     (req, res, next) =>
       newModelData = @_createModelFromResource req.body
@@ -103,6 +115,9 @@ module.exports = class ResourceSchema
           res.body = resource
           next()
 
+  ###
+  Generate middleware to handle DELETE requests to resource
+  ###
   destroy: (paramId='_id') ->
     (req, res, next) =>
       idValue = req.params[paramId]
@@ -119,10 +134,16 @@ module.exports = class ResourceSchema
         res.body = "Resource with id #{idValue} successfully deleted from #{@Model.modelName} collection"
         next()
 
+  ###
+  Convenience middleware for sending the resource to the client after it has been saved to res.body
+  ###
   send: (req, res) =>
     res.body ?= {}
     res.send res.body
 
+  ###
+  Wait for all $find, and queryParams to resolve, and build the model query with the results
+  ###
   _getQueryConfigPromise: (requestQuery) =>
     modelQuery = @options.defaultQuery or {}
     deferred = q.defer()
@@ -143,6 +164,14 @@ module.exports = class ResourceSchema
       deferred.resolve(modelQuery)
 
     deferred.promise
+
+  _createModelFromResource: (resource) =>
+    model = {}
+    for resourceField, config of @schema
+      if config.$field
+        value = dot.get resource, resourceField
+        dot.set(model, config.$field, value) if value
+    model
 
   _createResourceFromModel: (model, resourceSelectFields) =>
     resource = {}
@@ -168,6 +197,9 @@ module.exports = class ResourceSchema
           dot.set(resource, resourceField, value) if value
     resource
 
+  ###
+  Wait for all $set queries to update models
+  ###
   _resolveResourceSetPromises: (resource, model, queryParams) =>
     setPromises = []
     for resourceField, config of @schema
@@ -177,6 +209,9 @@ module.exports = class ResourceSchema
         setPromises.push d.promise
     return q.all setPromises
 
+  ###
+  Wait for all $get queries to update resources
+  ###
   _resolveResourceGetPromises: (resources, models, query) =>
     getPromises = []
     resourceSelectFields = @_getResourceSelectFields(query)
@@ -190,6 +225,9 @@ module.exports = class ResourceSchema
           getPromises.push d.promise
     return q.all getPromises
 
+  ###
+  Get $group config used for aggregating the model
+  ###
   _getGroupQuery: =>
     groupQuery = {}
     #set _id
@@ -205,17 +243,18 @@ module.exports = class ResourceSchema
         groupQuery[field] = config.$get
     groupQuery
 
-  _createModelFromResource: (resource) =>
-    model = {}
-    for resourceField, config of @schema
-      if config.$field
-        value = dot.get resource, resourceField
-        dot.set(model, config.$field, value) if value
-    model
-
+  ###
+  Get value to use for limiting query results
+  @param [Object] query - query params from client
+  @returns [Number] Max number of resources to return in response
+  ###
   _getLimit: (query) =>
     query.$limit ? @options.defaultLimit
 
+  ###
+  Get value to use for limiting query results
+  @param [Object] query - query params from client
+  ###
   _getResourceSelectFields: (query) =>
     [resourceFields, modelFields] = @_getResourceAndModelFields()
     select = query.$select
@@ -226,7 +265,11 @@ module.exports = class ResourceSchema
       resourceSelectFields = resourceFields
     return resourceSelectFields
 
-  getModelSelectFields: (query) =>
+  ###
+  Convert select fields in query, to fields that can be used for
+  @param [Object] query - query params from client
+  ###
+  _getModelSelectFields: (query) =>
     [resourceFields, modelFields] = @_getResourceAndModelFields()
     select = query.$select
     if select
@@ -238,6 +281,21 @@ module.exports = class ResourceSchema
       modelSelectFields = modelFields.join(' ')
     modelSelectFields
 
+  ###
+  Select valid properties from query that can be used for filtering resources
+  ###
+  _selectValidQuerySearchFields: (query) =>
+    queryDotString = @_convertKeysToDotStrings query
+    queryParamFields = Object.keys @options.queryParams
+    validFields = {}
+    for field, value of queryDotString
+      if field in queryParamFields
+        dot.set validFields, field, value
+    @_convertKeysToDotStrings validFields
+
+  ###
+  Select valid properties from query that can be used for filtering resources in the schema
+  ###
   _selectValidResourceSearchFields: (query) =>
     queryDotString = @_convertKeysToDotStrings query
     [resourceFields, modelFields] = @_getResourceAndModelFields()
@@ -247,6 +305,10 @@ module.exports = class ResourceSchema
         dot.set validFields, field, value
     @_convertKeysToDotStrings validFields
 
+  ###
+  Collapse all nested dot fields into standard format
+  @example {a: {b: 1}} -> {'a.b': 1}
+  ###
   _convertKeysToDotStrings: (obj) =>
     dotKeys = {}
     dotStringify = (obj, current) ->
@@ -277,6 +339,23 @@ module.exports = class ResourceSchema
         $field: schemaKey
     schema
 
+  ###
+  Convert resource schema to standard format for easier manipulation
+  - converts all keys to dot strings
+  - Adds $field, if using implicit model field syntax
+  @example
+    {
+      'test': {
+        'property': 'test'
+      }
+    }
+    =>
+    {
+      'test.property': {
+        $field: 'test'
+      }
+    }
+  ###
   _normalizeSchema: (schema) =>
     schema = @_convertKeysToDotStrings(schema)
     normalizedSchema = {}
