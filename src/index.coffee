@@ -35,27 +35,28 @@ module.exports = class ResourceSchema
       return @_getAll
 
   _getAll: (req, res, next) =>
-      sendResources = (modelsFound) =>
-        resources = modelsFound.map (modelFound) =>
-          @_createResourceFromModel(modelFound, req.query.$select)
-        @_resolveResourceGetPromises(resources, modelsFound, req.query).then =>
-          res.body = resources
-          next()
+    sendResources = (err, modelsFound) =>
+      resources = modelsFound.map (modelFound) =>
+        @_createResourceFromModel(modelFound, req.query.$select)
+      @_resolveResourceGetPromises(resources, modelsFound, req.query).then =>
+        res.body = resources
+        next()
 
-      limit = @_getLimit req.query
-      modelSelect = @_getModelSelectFields req.query
-      @_getQueryConfigPromise(req.query).then (queryConfig) =>
-        if @options.groupBy
-          modelQuery = @Model.aggregate()
-          modelQuery.match(queryConfig)
-          modelQuery.group(@_getGroupQuery())
+    limit = @_getLimit req.query
+    modelSelect = @_getModelSelectFields req.query
+    @_getQueryConfigPromise(req.query).then (queryConfig) =>
+      if @options.groupBy
+        modelQuery = @Model.aggregate()
+        modelQuery.match(queryConfig)
+        modelQuery.group(@_getGroupQuery())
 
-        if not @options.groupBy
-          modelQuery = @Model.find(queryConfig)
-          modelQuery.select(modelSelect) if select? # reduce query if possible
+      if not @options.groupBy
+        modelQuery = @Model.find(queryConfig)
+        modelQuery.select(modelSelect) if select? # reduce query if possible
+        modelQuery.lean()
 
-        modelQuery.limit(limit) if limit?
-        modelQuery.exec().then sendResources
+      modelQuery.limit(limit) if limit?
+      modelQuery.exec sendResources
 
   _getOne: (paramId) =>
     (req, res, next) =>
@@ -67,6 +68,7 @@ module.exports = class ResourceSchema
 
       modelQuery = @Model.findOne(query)
       modelQuery.select(select) if select?
+      modelQuery.lean()
       modelQuery.exec (err, modelFound) =>
         if err
           return res.status(400).send err
@@ -106,9 +108,9 @@ module.exports = class ResourceSchema
       # if using mongoose timestamps plugin:
       # since we are not updating an instance of mongoose, we need to manually add the updatedAt timestamp
       # newModelData.updatedAt = new Date() if newModelData.updatedAt
-      @Model.findOne query, (err, modelFound) =>
+      @Model.findOne(query).lean().exec (err, modelFound) =>
         @_resolveResourceSetPromises(req.body, modelFound, {}).then =>
-        @Model.findOneAndUpdate query, newModelData, (err, modelUpdated) =>
+        @Model.findOneAndUpdate(query, newModelData).lean().exec (err, modelUpdated) =>
           res.send 400, err if err
           res.send 404, 'resource not found' if !modelUpdated
           resource = @_createResourceFromModel(modelUpdated)
