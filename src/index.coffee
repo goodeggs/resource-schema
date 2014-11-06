@@ -28,8 +28,13 @@ module.exports = class ResourceSchema
   ###
   Generate middleware to handle GET requests to resource
   ###
-  index: ->
-    (req, res, next) =>
+  get: (paramId) ->
+    if (paramId)
+      return @_getOne(paramId)
+    else
+      return @_getAll
+
+  _getAll: (req, res, next) =>
       sendResources = (modelsFound) =>
         resources = modelsFound.map (modelFound) =>
           @_createResourceFromModel(modelFound, req.query.$select)
@@ -52,10 +57,7 @@ module.exports = class ResourceSchema
         modelQuery.limit(limit) if limit?
         modelQuery.exec().then sendResources
 
-  ###
-  Generate middleware for GET requests to resource instance
-  ###
-  show: (paramId='_id') =>
+  _getOne: (paramId) =>
     (req, res, next) =>
       select = @_getModelSelectFields req.query
 
@@ -79,7 +81,7 @@ module.exports = class ResourceSchema
   ###
   Generate middleware to handle POST requests to resource
   ###
-  create: ->
+  post: ->
     (req, res, next) =>
       newModelData = @_createModelFromResource req.body
       model = new @Model(newModelData)
@@ -93,7 +95,7 @@ module.exports = class ResourceSchema
   ###
   Generate middleware to handle PUT requests to resource
   ###
-  update: (paramId='_id') ->
+  put: (paramId) ->
     (req, res, next) =>
       newModelData = @_createModelFromResource req.body
 
@@ -117,7 +119,7 @@ module.exports = class ResourceSchema
   ###
   Generate middleware to handle DELETE requests to resource
   ###
-  destroy: (paramId='_id') ->
+  delete: (paramId) ->
     (req, res, next) =>
       idValue = req.params[paramId]
       query = {}

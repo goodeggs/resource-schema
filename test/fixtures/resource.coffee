@@ -45,8 +45,9 @@ getParentModelsByChildId = fibrous (models) ->
 
 module.exports = app = express()
 
-app.get '/', resource.index(), resource.send
-app.post '/', resource.create(), resource.send
-app.put '/:_id', resource.update(), resource.send
-app.get '/:_id', resource.show(), resource.send
-app.delete '/:_id', resource.destroy(), resource.send
+
+app.get '/', resource.get(), resource.send
+app.post '/', resource.post(), resource.send
+app.put '/:_id', resource.put('_id'), resource.send
+app.get '/:_id', resource.get('_id'), resource.send
+app.delete '/:_id', resource.delete('_id'), resource.send
