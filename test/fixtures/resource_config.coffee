@@ -12,6 +12,8 @@ schema =
   day: 'day'
 
 schemaConfig =
+  queryParams:
+    'startDate': fibrous (value) -> { 'day': $gte: value }
   defaultQuery:
     day: $gte: '2014-10-01'
   defaultLimit: 2

@@ -132,6 +132,32 @@ describe '.index()', ->
       expect(response.body[1].parentName).to.equal 'banana'
       expect(response.body[2].parentName).to.equal 'orange'
 
+  describe 'second dynamic $get field', ->
+    {model} = {}
+    before fibrous ->
+      ParentModel.sync.remove()
+      Model.sync.remove()
+      model1 = Model.sync.create name: 'foo'
+      model2 = Model.sync.create name: 'bar'
+      model3 = Model.sync.create name: 'baz'
+      parentModel1 = ParentModel.sync.create
+        name: 'banana'
+        modelIds: [model1._id, model2._id]
+      parentModel2 = ParentModel.sync.create
+        name: 'orange'
+        modelIds: [model3._id]
+
+    it 'returns all fields in the model', fibrous ->
+      response = request.sync.get
+        url: 'http://127.0.0.1:4000/resource',
+        json: true
+
+      expect(response.statusCode).to.equal 200
+      expect(response.body.length).to.equal 3
+      expect(response.body[0].secondGet).to.equal 'test'
+      expect(response.body[1].secondGet).to.equal 'test'
+      expect(response.body[2].secondGet).to.equal 'test'
+
   describe 'options.defaultQuery', ->
     {model} = {}
     before fibrous ->
@@ -154,10 +180,35 @@ describe '.index()', ->
         url: 'http://127.0.0.1:4000/resource_config',
         json: true
 
-
       expect(response.statusCode).to.equal 200
       expect(response.body.length).to.equal 1
       expect(response.body[0].day).to.equal '2014-10-05'
+
+  xdescribe 'options.queryParams', ->
+    {model} = {}
+    before fibrous ->
+      Model.sync.remove()
+
+      # default limit is after 2014-10-05
+      model1 = Model.sync.create
+        name: 'foo'
+        day: '2014-09-18'
+      model2 = Model.sync.create
+        name: 'bar'
+        day: '2014-09-27'
+      model3 = Model.sync.create
+        name: 'baz'
+        day: '2014-10-05'
+
+    it 'applies default query, if not overwritten', fibrous ->
+      console.log {count: Model.sync.count()}
+      console.log {response: response.body}
+      response = request.sync.get
+        url: 'http://127.0.0.1:4000/resource_config?startDate=2014-09-27',
+        json: true
+
+      expect(response.statusCode).to.equal 200
+      expect(response.body.length).to.equal 2
 
   describe 'options.defaultLimit', ->
     {model} = {}

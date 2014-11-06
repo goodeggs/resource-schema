@@ -37,6 +37,7 @@ module.exports = class ResourceSchema
       limit = @_getLimit req.query
       modelSelect = @getModelSelectFields req.query
       @_getQueryConfigPromise(req.query).then (queryConfig) =>
+        console.log {queryConfig}
         if @options.groupBy
           modelQuery = @Model.aggregate()
           modelQuery.match(queryConfig)
@@ -176,13 +177,17 @@ module.exports = class ResourceSchema
         setPromises.push d.promise
     return q.all setPromises
 
-  _resolveResourceGetPromises: (resources, models, queryParams) =>
+  _resolveResourceGetPromises: (resources, models, query) =>
     getPromises = []
+    resourceSelectFields = @_getResourceSelectFields(query)
     for resourceField, config of @schema
-      if config.$get and typeof config.$get is 'function'
-        d = q.defer()
-        config.$get(resources, models, queryParams, (err, results) -> d.resolve())
-        getPromises.push d.promise
+      if config.$get and typeof config.$get is 'function' and resourceField in resourceSelectFields
+        do ->
+          d = q.defer()
+          config.$get resources, models, query, (err, results) ->
+            console.log err if err
+            d.resolve()
+          getPromises.push d.promise
     return q.all getPromises
 
   _getGroupQuery: =>
@@ -210,6 +215,16 @@ module.exports = class ResourceSchema
 
   _getLimit: (query) =>
     query.$limit ? @options.defaultLimit
+
+  _getResourceSelectFields: (query) =>
+    [resourceFields, modelFields] = @_getResourceAndModelFields()
+    select = query.$select
+    if select
+      select = select.split(' ') if typeof select is 'string'
+      resourceSelectFields = _(select).intersection resourceFields
+    else
+      resourceSelectFields = resourceFields
+    return resourceSelectFields
 
   getModelSelectFields: (query) =>
     [resourceFields, modelFields] = @_getResourceAndModelFields()

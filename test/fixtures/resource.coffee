@@ -6,14 +6,14 @@ _ = require 'underscore'
 ResourceSchema = require '../..'
 express = require 'express'
 
-resource = new ResourceSchema Model,
-  _id: '_id'
-  name: 'name'
-  'product.price': 'product.price'
-  productName: 'product.name'
-  normal:
-    nesting: 'normal.nesting'
-  parentName:
+schema = {
+  '_id'
+  'name'
+  'product.price'
+  'productName': 'product.name'
+  'normal':
+    'nesting': 'normal.nesting'
+  'parentName':
     $find: fibrous (searchValue) ->
       parentModel = ParentModel.sync.findOne(name: searchValue)
       return {_id: $in: parentModel.modelIds}
@@ -25,6 +25,14 @@ resource = new ResourceSchema Model,
       parentModel = ParentModel.sync.findOne(modelIds: $in: [model._id])
       parentModel.name = newValue
       parentModel.sync.save()
+  'secondGet':
+    $get: fibrous (resourcesToReturn, models, queryParams) ->
+      resourcesToReturn.forEach (foundResource) ->
+        foundResource.secondGet = 'test'
+}
+
+resource = new ResourceSchema Model, schema,
+
 
 getParentModelsByChildId = fibrous (models) ->
   modelIds = _(models).pluck('_id')
