@@ -112,13 +112,13 @@ module.exports = class ResourceSchema
       # newModelData.updatedAt = new Date() if newModelData.updatedAt
       @Model.findOne(query).lean().exec (err, modelFound) =>
         @_resolveResourceSetPromises(req.body, modelFound, {}).then =>
-        @Model.findOneAndUpdate(query, newModelData, {upsert: true}).lean().exec (err, modelUpdated) =>
-          res.send 400, err if err
-          res.send 404, 'resource not found' if !modelUpdated
-          resource = @_createResourceFromModel(modelUpdated, req.query.$select)
-          res.status(200)
-          res.body = resource
-          next()
+          @Model.findOneAndUpdate(query, newModelData, {upsert: true}).lean().exec (err, modelUpdated) =>
+            res.send 400, err if err
+            res.send 404, 'resource not found' if !modelUpdated
+            resource = @_createResourceFromModel(modelUpdated, req.query.$select)
+            res.status(200)
+            res.body = resource
+            next()
 
   ###
   Generate middleware to handle DELETE requests for resource
