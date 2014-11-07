@@ -12,6 +12,4 @@ schema = new mongoose.Schema
     nesting: type: String
   productCount: type: Number
 
-
-
 module.exports = mongoose.model 'Model', schema

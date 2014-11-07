@@ -2,6 +2,7 @@ sinon = require 'sinon'
 fibrous = require 'fibrous'
 mongoose = require 'mongoose'
 Model = require './fixtures/model'
+ModelCustomKey = require './fixtures/model_custom_key'
 ParentModel = require './fixtures/parent_model'
 expect = require('chai').expect
 request = require 'request'
@@ -11,7 +12,7 @@ MongooseResource = require '..'
 
 {response, model} = {}
 
-describe '.update("paramVariableName")', ->
+describe '.put(id)', ->
   describe 'updating model values', ->
     before fibrous ->
       Model.sync.remove()
@@ -41,6 +42,31 @@ describe '.update("paramVariableName")', ->
       expect(modelsFound[0].product.name).to.equal 'berries'
       expect(modelsFound[0].product.price).to.equal 25
       expect(modelsFound[0].name).to.equal 'test'
+
+  describe 'putting to uncreated resource (upserting)', ->
+    before fibrous ->
+      ModelCustomKey.sync.remove()
+      modelCustomKey = ModelCustomKey.sync.create
+        key: 'foo'
+        name: 'test1'
+
+      response = request.sync.put
+        url: "http://127.0.0.1:4000/resource_custom_key/bar"
+        json:
+          key: 'bar'
+          name: 'test2'
+
+    it 'returns the upserted resource', ->
+      expect(response.statusCode).to.equal 200
+      expect(response.body).to.deep.equal
+        key: 'bar'
+        name: 'test2'
+
+    it 'creates the resource in teh database', fibrous ->
+      modelFound = ModelCustomKey.sync.findOne(key: 'bar')
+      expect(ModelCustomKey.sync.count()).to.equal 2
+      expect(modelFound.name).to.equal 'test2'
+      expect(modelFound.key).to.equal 'bar'
 
   describe 'updating dynamic $set values', ->
     before fibrous ->
