@@ -24,6 +24,49 @@ describe '.index()', ->
       expect(response.body.length).to.equal 1
       expect(response.body[0].name).to.equal 'test'
 
+  describe 'optional field', ->
+    before fibrous ->
+      Model.sync.remove()
+      targetId = new mongoose.Types.ObjectId()
+      Model.sync.create
+        name: 'test1'
+        productCount: 5
+      Model.sync.create
+        name: 'test2'
+        productCount: 3
+
+    it 'adds optional field with $add query parameter', fibrous ->
+      response = request.sync.get
+        url: 'http://127.0.0.1:4000/resource?$add=productCount',
+        json: true
+      expect(response.body.length).to.equal 2
+      expect(response.body[0].productCount).to.equal 5
+      expect(response.body[1].productCount).to.equal 3
+
+    it 'adds optional $get field with $add query parameter', fibrous ->
+      response = request.sync.get
+        url: 'http://127.0.0.1:4000/resource?$add=weeklyProductCount',
+        json: true
+      expect(response.body.length).to.equal 2
+      expect(response.body[0].weeklyProductCount).to.equal 10
+      expect(response.body[1].weeklyProductCount).to.equal 10
+
+    it 'ignores optional $get field if no $add query parameter', fibrous ->
+      response = request.sync.get
+        url: 'http://127.0.0.1:4000/resource',
+        json: true
+      expect(response.body.length).to.equal 2
+      expect(response.body[0].weeklyProductCount).to.be.undefined
+      expect(response.body[1].weeklyProductCount).to.be.undefined
+
+    it 'ignores optional field if no $add query parameter', fibrous ->
+      response = request.sync.get
+        url: 'http://127.0.0.1:4000/resource',
+        json: true
+      expect(response.body.length).to.equal 2
+      expect(response.body[0].productCount).to.be.undefined
+      expect(response.body[1].productCount).to.be.undefined
+
   describe 'search fields', ->
     describe 'single search field', ->
       before fibrous ->
@@ -229,10 +272,8 @@ describe '.index()', ->
         url: 'http://127.0.0.1:4000/resource_config?containsDays=2014-09-27&containsDays=2014-09-18',
         json: true
 
-      console.log {response: response.body}
-
       expect(response.statusCode).to.equal 200
-      # expect(response.body.length).to.equal 2
+      expect(response.body.length).to.equal 2
       expect(response.body[0].day).to.equal '2014-09-18'
       expect(response.body[1].day).to.equal '2014-09-27'
 
@@ -254,7 +295,6 @@ describe '.index()', ->
         day: '2014-10-05'
 
     it 'uses default limit', fibrous ->
-      console.log 'DEFAULT LIMIT'
       response = request.sync.get
         url: 'http://127.0.0.1:4000/resource_config',
         json: true

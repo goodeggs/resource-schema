@@ -10,5 +10,8 @@ schema = new mongoose.Schema
     price: type: Number
   normal:
     nesting: type: String
+  productCount: type: Number
+
+
 
 module.exports = mongoose.model 'Model', schema

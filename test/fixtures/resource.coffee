@@ -13,6 +13,14 @@ schema = {
   'productName': 'product.name'
   'normal':
     'nesting': 'normal.nesting'
+  'productCount':
+    $optional: true
+    $field: 'productCount'
+  'weeklyProductCount':
+    $optional: true
+    $get: fibrous (resources) ->
+      resources.forEach (resource) ->
+        resource.weeklyProductCount = 10
   'parentName':
     $find: fibrous (searchValue) ->
       parentModel = ParentModel.sync.findOne(name: searchValue)
@@ -20,7 +28,7 @@ schema = {
     $get: fibrous (resourcesToReturn, models, queryParams) ->
       parentModelsByChildId = getParentModelsByChildId.sync(models)
       resourcesToReturn.forEach (foundResource) ->
-        foundResource.parentName = parentModelsByChildId[foundResource._id].name
+        foundResource.parentName = parentModelsByChildId[foundResource._id]?.name
     $set: fibrous (newValue, model, queryParams) ->
       parentModel = ParentModel.sync.findOne(modelIds: $in: [model._id])
       parentModel.name = newValue

@@ -2,12 +2,13 @@ dot = require 'dot-component'
 _ = require 'underscore'
 q = require 'q'
 
-RESERVED_KEYWORDS = ['$find', '$get', '$set', '$field']
+RESERVED_KEYWORDS = ['$find', '$get', '$set', '$field', '$optional']
 
 ###
 normalized schema:
 {
   normalField: {
+    $optional: true
     $field: 'test.name'
   },
   dynamicField: {
@@ -53,7 +54,7 @@ module.exports = class ResourceSchema
 
       if not @options.groupBy
         modelQuery = @Model.find(queryConfig)
-        modelQuery.select(modelSelect) if select? # reduce query if possible
+        modelQuery.select(modelSelect)
         modelQuery.lean()
 
       modelQuery.limit(limit) if limit?
@@ -230,6 +231,7 @@ module.exports = class ResourceSchema
     getPromises = []
     resourceSelectFields = @_getResourceSelectFields(query)
     for resourceField, config of @schema
+
       if config.$get and typeof config.$get is 'function' and resourceField in resourceSelectFields
         do ->
           d = q.defer()
@@ -270,14 +272,35 @@ module.exports = class ResourceSchema
   @param [Object] query - query params from client
   ###
   _getResourceSelectFields: (query) =>
-    [resourceFields, modelFields] = @_getResourceAndModelFields()
+    [resourceFields] = @_getResourceAndModelFields()
     select = query.$select
-    if select
-      select = select.split(' ') if typeof select is 'string'
-      resourceSelectFields = _(select).intersection resourceFields
-    else
-      resourceSelectFields = resourceFields
-    return resourceSelectFields
+
+    resourceSelectFields =
+      if select
+        select = select.split(' ') if typeof select is 'string'
+        _(select).intersection resourceFields
+      else
+        _(resourceFields).reject (resourceField) => @schema[resourceField].$optional
+
+    _.union(resourceSelectFields, @_getAddFields(query))
+
+  ###
+  Get all valid $add fields from the query. Used to select $optional fields from schema
+  @param [Object] query - query params from client
+  @returns [Array] valid keys to add from schema
+  ###
+  _getAddFields: (query) =>
+    [resourceFields] = @_getResourceAndModelFields()
+
+    addFields =
+      if typeof query.$add is 'string'
+        query.$add.split(' ')
+      else if Array.isArray query.$add
+        query.$add
+      else
+        []
+
+    _(addFields).intersection(resourceFields)
 
   ###
   Convert select fields in query, to fields that can be used for
@@ -286,14 +309,19 @@ module.exports = class ResourceSchema
   _getModelSelectFields: (query) =>
     [resourceFields, modelFields] = @_getResourceAndModelFields()
     select = query.$select
-    if select
-      select = select.split(' ') if typeof select is 'string'
-      resourceSelectFields = _(select).intersection resourceFields
-      modelSelectFields = resourceSelectFields.map (resourceSelectField) => @schema[resourceSelectField].$field
-      modelSelectFields = modelSelectFields.join(' ')
-    else
-      modelSelectFields = modelFields.join(' ')
-    modelSelectFields
+    addFields = @_getAddFields(query)
+
+    modelSelectFields =
+      if select
+        select = select.split(' ') if typeof select is 'string'
+        resourceSelectFields = _(select).intersection resourceFields
+        resourceSelectFields.map (resourceSelectField) => @schema[resourceSelectField].$field
+      else
+        resourceFields.map (resourceField) =>
+          if @schema[resourceField].$field and (not @schema[resourceField].$optional or resourceField in addFields)
+            @schema[resourceField].$field
+
+    _(modelSelectFields).compact().join(' ')
 
   ###
   Select valid properties from query that can be used for filtering resources
