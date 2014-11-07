@@ -9,6 +9,7 @@ express = require 'express'
 schema = {
   '_id'
   'name'
+  'active'
   'product.price'
   'productName': 'product.name'
   'normal':

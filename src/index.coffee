@@ -185,7 +185,7 @@ module.exports = class ResourceSchema
     for resourceField, config of @schema
       if config.$field
         value = dot.get resource, resourceField
-        dot.set(model, config.$field, value) if value
+        dot.set(model, config.$field, value) if value isnt undefined
     model
 
   _createResourceFromModel: (model, resourceSelectFields) =>
@@ -209,7 +209,7 @@ module.exports = class ResourceSchema
         # TODO: helper for this
         if config.$get and typeof config.$get is 'object'
           value = model[resourceField]
-          dot.set(resource, resourceField, value) if value
+          dot.set(resource, resourceField, value)
     resource
 
   ###

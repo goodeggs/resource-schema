@@ -43,6 +43,23 @@ describe '.put(id)', ->
       expect(modelsFound[0].product.price).to.equal 25
       expect(modelsFound[0].name).to.equal 'test'
 
+  describe 'updating falsy values', ->
+    before fibrous ->
+      Model.sync.remove()
+      model = Model.sync.create
+        name: 'test'
+        active: true
+
+    it 'sets the values', fibrous ->
+      response = request.sync.put
+        url: "http://127.0.0.1:4000/resource/#{model._id}"
+        json:
+          name: 'test'
+          active: false
+
+      expect(Model.sync.findById(model._id).active).to.equal false
+      expect(response.body.active).to.equal false
+
   describe 'putting to uncreated resource (upserting)', ->
     before fibrous ->
       ModelCustomKey.sync.remove()

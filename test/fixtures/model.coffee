@@ -4,6 +4,7 @@ schema = new mongoose.Schema
   name: type: String
   lastName: type: String
   day: type: String
+  active: type: Boolean
   product:
     id: type: mongoose.Schema.ObjectId
     name: type: String
