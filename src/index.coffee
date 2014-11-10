@@ -1,6 +1,7 @@
 dot = require 'dot-component'
 _ = require 'underscore'
 q = require 'q'
+clone = require 'clone'
 
 RESERVED_KEYWORDS = ['$find', '$get', '$set', '$field', '$optional']
 
@@ -159,7 +160,7 @@ module.exports = class ResourceSchema
   Wait for all $find, and queryParams to resolve, and build the model query with the results
   ###
   _getQueryConfigPromise: (requestQuery, {req, res}) =>
-    modelQuery = _.clone(@options.defaultQuery) or {}
+    modelQuery = clone(@options.defaultQuery) or {}
     deferred = q.defer()
     queryPromises = []
     resourceSearchFields = @_selectValidResourceSearchFields requestQuery
@@ -168,8 +169,8 @@ module.exports = class ResourceSchema
       for resourceField, value of resourceSearchFields
         if @schema[resourceField].$find
           d = q.defer()
-          @schema[resourceField].$find value, {req, res}, (err, query) ->
-            _(modelQuery).extend(query)
+          @schema[resourceField].$find value, {req, res}, (err, query) =>
+            @_deepExtend(modelQuery, query)
             d.resolve()
           queryPromises.push(d.promise)
         else if @schema[resourceField].$field
@@ -433,3 +434,18 @@ module.exports = class ResourceSchema
         else
           throw new Error("QueryParam config for #{param} must be either a configuration object or a function")
     normalizedParams
+
+  ###
+  Extends two levels deep, so that we can extend query configuration objects without overwritting previous queries for the same property
+  # deep extend so that we can add multiple queries to any given property
+  # e.g. {'day': $gt: '2014-10-1'}, {day: $lt: '2014-11-1'} =>
+  # {'day': $gt: '2014-10-1', $lt: '2014-11-1'}
+  ###
+  _deepExtend: (obj, obj2) ->
+    for key, config of obj2
+      if obj[key]? and typeof config is 'object'
+        for newKey, newValue of config
+          obj[key][newKey] = newValue
+      else
+        obj[key] = config
+    obj

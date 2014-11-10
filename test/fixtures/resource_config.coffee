@@ -16,8 +16,8 @@ schemaConfig =
     'startDate': fibrous (value) -> { 'day': $gte: value }
     'containsDays': fibrous (days) -> { 'day': $in: days }
   defaultQuery:
-    day: $gte: '2014-10-01'
-  defaultLimit: 2
+    day: $gte: '2014-09-19'
+  defaultLimit: 6
 
 resource = new ResourceSchema Model, schema, schemaConfig
 

@@ -238,15 +238,16 @@ describe '.get()', ->
         json: true
 
       expect(response.statusCode).to.equal 200
-      expect(response.body.length).to.equal 1
-      expect(response.body[0].day).to.equal '2014-10-05'
+      expect(response.body.length).to.equal 2
+      expect(response.body[0].day).to.equal '2014-09-27'
+      expect(response.body[1].day).to.equal '2014-10-05'
 
   describe 'options.queryParams', ->
     {model} = {}
     before fibrous ->
       Model.sync.remove()
 
-      # default limit is after 2014-10-05
+      # default limit is after 2014-09-18
       model1 = Model.sync.create
         name: 'foo'
         day: '2014-09-18'
@@ -256,26 +257,43 @@ describe '.get()', ->
       model3 = Model.sync.create
         name: 'baz'
         day: '2014-10-05'
+      model4 = Model.sync.create
+        name: 'lu'
+        day: '2014-10-09'
+      model5 = Model.sync.create
+        name: 'la'
+        day: '2014-10-15'
 
     it 'applies default query, if not overwritten', fibrous ->
       response = request.sync.get
-        url: 'http://127.0.0.1:4000/resource_config?startDate=2014-09-27',
+        url: 'http://127.0.0.1:4000/resource_config',
         json: true
 
       expect(response.statusCode).to.equal 200
-      expect(response.body.length).to.equal 2
+      expect(response.body.length).to.equal 4
       expect(response.body[0].day).to.equal '2014-09-27'
       expect(response.body[1].day).to.equal '2014-10-05'
+      expect(response.body[2].day).to.equal '2014-10-09'
+      expect(response.body[3].day).to.equal '2014-10-15'
 
-    it 'it does not mess up when querying for arrays', fibrous ->
+    it 'overwrites the default query', fibrous ->
       response = request.sync.get
-        url: 'http://127.0.0.1:4000/resource_config?containsDays=2014-09-27&containsDays=2014-09-18',
+        url: 'http://127.0.0.1:4000/resource_config?startDate=2014-10-06',
+        json: true
+      expect(response.statusCode).to.equal 200
+      expect(response.body.length).to.equal 2
+      expect(response.body[0].day).to.equal '2014-10-09'
+      expect(response.body[1].day).to.equal '2014-10-15'
+
+    it 'queries for arrays (still including the default query)', fibrous ->
+      response = request.sync.get
+        url: 'http://127.0.0.1:4000/resource_config?containsDays=2014-09-18&containsDays=2014-10-05&containsDays=2014-10-15',
         json: true
 
       expect(response.statusCode).to.equal 200
       expect(response.body.length).to.equal 2
-      expect(response.body[0].day).to.equal '2014-09-18'
-      expect(response.body[1].day).to.equal '2014-09-27'
+      expect(response.body[0].day).to.equal '2014-10-05'
+      expect(response.body[1].day).to.equal '2014-10-15'
 
   describe 'options.defaultLimit', ->
     {model} = {}
@@ -283,7 +301,7 @@ describe '.get()', ->
       ParentModel.sync.remove()
       Model.sync.remove()
 
-      # default limit is after 2014-10-05
+      # default limit 6
       model1 = Model.sync.create
         name: 'foo'
         day: '2014-10-05'
@@ -291,6 +309,18 @@ describe '.get()', ->
         name: 'bar'
         day: '2014-10-05'
       model3 = Model.sync.create
+        name: 'baz'
+        day: '2014-10-05'
+      model4 = Model.sync.create
+        name: 'baz'
+        day: '2014-10-05'
+      model5 = Model.sync.create
+        name: 'baz'
+        day: '2014-10-05'
+      model6 = Model.sync.create
+        name: 'baz'
+        day: '2014-10-05'
+      model7 = Model.sync.create
         name: 'baz'
         day: '2014-10-05'
 
@@ -301,7 +331,7 @@ describe '.get()', ->
 
 
       expect(response.statusCode).to.equal 200
-      expect(response.body.length).to.equal 2
+      expect(response.body.length).to.equal 6
 
   describe '$limit', ->
     before fibrous ->
