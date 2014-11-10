@@ -8,7 +8,11 @@ express = require 'express'
 
 schema = {
   '_id'
-  'name'
+  'name':
+    $field: 'name'
+    $set: fibrous (modelsToSave, {req, res, resources}) ->
+      for model in modelsToSave
+        model.name = model.name.toLowerCase()
   'active'
   'product.price'
   'productName': 'product.name'
@@ -19,23 +23,20 @@ schema = {
     $field: 'productCount'
   'weeklyProductCount':
     $optional: true
-    $get: fibrous (resources) ->
-      resources.forEach (resource) ->
+    $get: fibrous (resourcesToReturn, {req, res, models}) ->
+      resourcesToReturn.forEach (resource) ->
         resource.weeklyProductCount = 10
   'parentName':
-    $find: fibrous (searchValue) ->
+    $find: fibrous (searchValue, {req, res}) ->
       parentModel = ParentModel.sync.findOne(name: searchValue)
       return {_id: $in: parentModel.modelIds}
-    $get: fibrous (resourcesToReturn, models, queryParams) ->
+    $get: fibrous (resourcesToReturn, {req, res, models}) ->
       parentModelsByChildId = getParentModelsByChildId.sync(models)
-      resourcesToReturn.forEach (foundResource) ->
-        foundResource.parentName = parentModelsByChildId[foundResource._id]?.name
-    $set: fibrous (newValue, model, queryParams) ->
-      parentModel = ParentModel.sync.findOne(modelIds: $in: [model._id])
-      parentModel.name = newValue
-      parentModel.sync.save()
+      resourcesToReturn.forEach (resource) ->
+        resource.parentName = parentModelsByChildId[resource._id]?.name
+
   'secondGet':
-    $get: fibrous (resourcesToReturn, models, queryParams) ->
+    $get: fibrous (resourcesToReturn, {req, res, models}) ->
       resourcesToReturn.forEach (foundResource) ->
         foundResource.secondGet = 'test'
 }

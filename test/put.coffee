@@ -87,26 +87,13 @@ describe '.put(id)', ->
 
   describe 'updating dynamic $set values', ->
     before fibrous ->
-      ParentModel.sync.remove()
       Model.sync.remove()
-      model = Model.sync.create
-        name: 'test'
-        product:
-          name: 'broccoli'
-          price: 25
-
-      parentModel = ParentModel.sync.create
-        name: 'vegetable'
-        modelIds: [model._id]
+      model = Model.sync.create name: 'hello'
 
       response = request.sync.put
         url: "http://127.0.0.1:4000/resource/#{model._id}"
-        json:
-          name: 'test'
-          productName: 'berries'
-          product: price: 25
-          parentName: 'fruit'
+        json: { name: 'GoodBye' }
 
-    it 'updates the dynamic value', fibrous ->
-      parentModel = ParentModel.sync.findOne()
-      expect(parentModel.name).to.equal 'fruit'
+    it 'sets the value to lowercase when saved', fibrous ->
+      model = Model.sync.findOne()
+      expect(model.name).to.equal 'goodbye'

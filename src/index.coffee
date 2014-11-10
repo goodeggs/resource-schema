@@ -40,13 +40,14 @@ module.exports = class ResourceSchema
       resources = modelsFound.map (modelFound) =>
         @_createResourceFromModel(modelFound, req.query.$select)
 
-      @_resolveResourceGetPromises(resources, modelsFound, req.query).then =>
+      @_resolveResourceGetPromises(resources, modelsFound, {req, res}).then =>
         res.body = resources
         next()
 
     limit = @_getLimit req.query
     modelSelect = @_getModelSelectFields req.query
-    @_getQueryConfigPromise(req.query).then (queryConfig) =>
+    @_getQueryConfigPromise(req.query, {req, res})
+    .then (queryConfig) =>
       if @options.groupBy
         modelQuery = @Model.aggregate()
         modelQuery.match(queryConfig)
@@ -59,6 +60,8 @@ module.exports = class ResourceSchema
 
       modelQuery.limit(limit) if limit?
       modelQuery.exec sendResources
+    .catch (e) ->
+      throw new Error(e)
 
   _getOne: (paramId) =>
     (req, res, next) =>
@@ -78,23 +81,30 @@ module.exports = class ResourceSchema
           return res.status(404).send "No #{paramId} found with id #{idValue}"
 
         resource = @_createResourceFromModel(modelFound, req.query.$select)
-        @_resolveResourceGetPromises([resource], [modelFound], req.query).then =>
+        @_resolveResourceGetPromises([resource], [modelFound], {req, res}).then =>
           res.body = resource
           next()
+        .catch (e) ->
+          throw new Error(e)
 
   ###
   Generate middleware to handle POST requests for resource
   ###
   post: ->
     (req, res, next) =>
-      newModelData = @_createModelFromResource req.body
-      model = new @Model(newModelData)
-      model.save (err, modelSaved) =>
-        res.send 400, err if err
-        resource = @_createResourceFromModel(modelSaved, req.query.$select)
-        res.status(201)
-        res.body = resource
-        next()
+      resource = req.body
+      newModelData = @_createModelFromResource resource
+      @_resolveResourceSetPromises([resource], [newModelData], {req, res})
+      .then =>
+        model = new @Model(newModelData)
+        model.save (err, modelSaved) =>
+          res.send 400, err if err
+          resource = @_createResourceFromModel(modelSaved, req.query.$select)
+          res.status(201)
+          res.body = resource
+          next()
+      .catch (e) ->
+        throw new Error(e)
 
   ###
   Generate middleware to handle PUT requests for resource
@@ -110,15 +120,14 @@ module.exports = class ResourceSchema
       # if using mongoose timestamps plugin:
       # since we are not updating an instance of mongoose, we need to manually add the updatedAt timestamp
       # newModelData.updatedAt = new Date() if newModelData.updatedAt
-      @Model.findOne(query).lean().exec (err, modelFound) =>
-        @_resolveResourceSetPromises(req.body, modelFound, {}).then =>
-          @Model.findOneAndUpdate(query, newModelData, {upsert: true}).lean().exec (err, modelUpdated) =>
-            res.send 400, err if err
-            res.send 404, 'resource not found' if !modelUpdated
-            resource = @_createResourceFromModel(modelUpdated, req.query.$select)
-            res.status(200)
-            res.body = resource
-            next()
+      @_resolveResourceSetPromises([req.body], [newModelData], {req, res}).then =>
+        @Model.findOneAndUpdate(query, newModelData, {upsert: true}).lean().exec (err, modelUpdated) =>
+          res.send 400, err if err
+          res.send 404, 'resource not found' if !modelUpdated
+          resource = @_createResourceFromModel(modelUpdated, req.query.$select)
+          res.status(200)
+          res.body = resource
+          next()
 
   ###
   Generate middleware to handle DELETE requests for resource
@@ -149,7 +158,7 @@ module.exports = class ResourceSchema
   ###
   Wait for all $find, and queryParams to resolve, and build the model query with the results
   ###
-  _getQueryConfigPromise: (requestQuery) =>
+  _getQueryConfigPromise: (requestQuery, {req, res}) =>
     modelQuery = _.clone(@options.defaultQuery) or {}
     deferred = q.defer()
     queryPromises = []
@@ -160,7 +169,7 @@ module.exports = class ResourceSchema
       for resourceField, value of resourceSearchFields
         if @schema[resourceField].$find
           d = q.defer()
-          @schema[resourceField].$find value, (err, query) ->
+          @schema[resourceField].$find value, {req, res}, (err, query) ->
             _(modelQuery).extend(query)
             d.resolve()
           queryPromises.push(d.promise)
@@ -215,28 +224,28 @@ module.exports = class ResourceSchema
   ###
   Wait for all $set queries to update models
   ###
-  _resolveResourceSetPromises: (resource, model, queryParams) =>
+  _resolveResourceSetPromises: (resources, models, {req, res}) =>
     setPromises = []
     for resourceField, config of @schema
       if config.$set
         d = q.defer()
-        config.$set(resource[resourceField], model, queryParams, (err, results) -> d.resolve())
+        config.$set(models, {req, res, resources}, (err, results) -> d.resolve())
         setPromises.push d.promise
     return q.all setPromises
 
   ###
   Wait for all $get queries to update resources
   ###
-  _resolveResourceGetPromises: (resources, models, query) =>
+  _resolveResourceGetPromises: (resources, models, {req, res}) =>
     getPromises = []
-    resourceSelectFields = @_getResourceSelectFields(query)
+    resourceSelectFields = @_getResourceSelectFields(req.query)
     for resourceField, config of @schema
-
       if config.$get and typeof config.$get is 'function' and resourceField in resourceSelectFields
+        # need to wrap in closure, otherwise we overwrite original promise references
         do ->
           d = q.defer()
-          config.$get resources, models, query, (err, results) ->
-            console.log err if err
+          config.$get resources, {req, res, models}, (err, results) ->
+            throw new Error(err) if err
             d.resolve()
           getPromises.push d.promise
     return q.all getPromises
