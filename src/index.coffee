@@ -163,7 +163,6 @@ module.exports = class ResourceSchema
     deferred = q.defer()
     queryPromises = []
     resourceSearchFields = @_selectValidResourceSearchFields requestQuery
-    querySearchFields = @_selectValidQuerySearchFields requestQuery
 
     if resourceSearchFields
       for resourceField, value of resourceSearchFields
@@ -175,14 +174,6 @@ module.exports = class ResourceSchema
           queryPromises.push(d.promise)
         else if @schema[resourceField].$field
           modelQuery[@schema[resourceField].$field] = value
-
-    if querySearchFields
-      for queryField, value of querySearchFields
-        d = q.defer()
-        @options.queryParams[queryField] value, (err, query) ->
-          _(modelQuery).extend(query)
-          d.resolve()
-        queryPromises.push(d.promise)
 
     q.all(queryPromises).then ->
       deferred.resolve(modelQuery)
@@ -337,15 +328,15 @@ module.exports = class ResourceSchema
   @param [Object] query - query params from client
   @returns [Object] valid query fields and their values
   ###
-  _selectValidQuerySearchFields: (query) =>
-    return {} if not @options.queryParams
-    queryDotString = @_convertKeysToDotStrings query
-    queryParamFields = Object.keys @options.queryParams
-    validFields = {}
-    for field, value of queryDotString
-      if field in queryParamFields
-        dot.set validFields, field, value
-    @_convertKeysToDotStrings validFields
+  # _selectValidQuerySearchFields: (query) =>
+  #   return {} if not @options.queryParams
+  #   queryDotString = @_convertKeysToDotStrings query
+  #   queryParamFields = Object.keys @options.queryParams
+  #   validFields = {}
+  #   for field, value of queryDotString
+  #     if field in queryParamFields
+  #       dot.set validFields, field, value
+  #   @_convertKeysToDotStrings validFields
 
   ###
   Select valid properties from query that can be used for filtering resources in the schema
@@ -426,4 +417,19 @@ module.exports = class ResourceSchema
           throw new Error "No model provided for field #{key}, and no default model provided"
       else
         normalizedSchema[key] = config
+
+    _(normalizedSchema).extend(@_getNormalizedQueryParams())
+
     normalizedSchema
+
+  _getNormalizedQueryParams: =>
+    normalizedParams = {}
+    if @options.queryParams
+      for param, config of @options.queryParams
+        if typeof config is 'function'
+          normalizedParams[param] = $find: config
+        else if tyepof config is 'object'
+          normalizedParams[param] = config
+        else
+          throw new Error("QueryParam config for #{param} must be either a configuration object or a function")
+    normalizedParams
