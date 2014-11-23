@@ -3,7 +3,15 @@ _ = require 'underscore'
 q = require 'q'
 clone = require 'clone'
 
-RESERVED_KEYWORDS = ['$find', '$get', '$set', '$field', '$optional']
+RESERVED_KEYWORDS = [
+  '$find'
+  '$get'
+  '$set'
+  '$field'
+  '$optional'
+  '$validate'
+  '$match'
+]
 
 ###
 normalized schema:
@@ -13,9 +21,11 @@ normalized schema:
     $field: 'test.name'
   },
   dynamicField: {
-    $find: ->
-    $get: ->
-    $set: ->
+    $validate: (value) ->
+    match: ->
+    $find: (value, done) ->
+    $get: (resources, request, done) ->
+    $set: (models, request, done) ->
   }
 }
 ###
@@ -44,6 +54,8 @@ module.exports = class ResourceSchema
       @_resolveResourceGetPromises(resources, modelsFound, {req, res}).then =>
         res.body = resources
         next()
+
+    return if not @_validate(req.query, res)
 
     limit = @_getLimit req.query
     modelSelect = @_getModelSelectFields req.query
@@ -429,7 +441,7 @@ module.exports = class ResourceSchema
       for param, config of @options.queryParams
         if typeof config is 'function'
           normalizedParams[param] = $find: config
-        else if tyepof config is 'object'
+        else if typeof config is 'object'
           normalizedParams[param] = config
         else
           throw new Error("QueryParam config for #{param} must be either a configuration object or a function")
@@ -449,3 +461,12 @@ module.exports = class ResourceSchema
       else
         obj[key] = config
     obj
+
+  _validate: (obj, res) ->
+    normalizedObj = @_convertKeysToDotStrings(obj)
+    for key, value of normalizedObj
+      if @schema[key]?.$validate
+        if not @schema[key].$validate(value)
+          res.status(400).send('"#{key}" is invalid')
+          return false
+    true

@@ -13,7 +13,10 @@ schema =
 
 schemaConfig =
   queryParams:
-    'startDate': fibrous (value) -> { 'day': $gte: value }
+    'startDate':
+      $validate: (value) ->
+        /[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/.test(value)
+      $find: fibrous (value) -> { 'day': $gte: value }
     'containsDays': fibrous (days) -> { 'day': $in: days }
   defaultQuery:
     day: $gte: '2014-09-19'
