@@ -325,6 +325,37 @@ describe '.get()', ->
 
       expect(response.statusCode).to.equal 400
 
+  describe '$match', ->
+    {model} = {}
+    before fibrous ->
+      ParentModel.sync.remove()
+      Model.sync.remove()
+
+      # default limit is after 2014-10-05
+      model1 = Model.sync.create
+        name: 'foo'
+        day: '2014-09-18'
+      model2 = Model.sync.create
+        name: 'bar'
+        day: '2014-09-27'
+      model3 = Model.sync.create
+        name: 'baz'
+        day: '2014-10-05'
+      model4 = Model.sync.create
+        name: 'lu'
+        day: '2014-10-09'
+      model5 = Model.sync.create
+        name: 'la'
+        day: '2014-10-15'
+
+    it 'returns a 400 if invalid', fibrous ->
+      response = request.sync.get
+        url: 'http://127.0.0.1:4000/resource_config?containsDays=20140918&containsDays=2014-10-05&containsDays=2014-10-15',
+        json: true
+
+      expect(response.statusCode).to.equal 400
+
+
   describe 'options.defaultLimit', ->
     {model} = {}
     before fibrous ->

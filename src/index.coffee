@@ -55,7 +55,7 @@ module.exports = class ResourceSchema
         res.body = resources
         next()
 
-    return if not @_validate(req.query, res)
+    return if not @_validateObject(req.query, res)
 
     limit = @_getLimit req.query
     modelSelect = @_getModelSelectFields req.query
@@ -462,11 +462,23 @@ module.exports = class ResourceSchema
         obj[key] = config
     obj
 
-  _validate: (obj, res) ->
+  _validateObject: (obj, res) ->
     normalizedObj = @_convertKeysToDotStrings(obj)
     for key, value of normalizedObj
-      if @schema[key]?.$validate
-        if not @schema[key].$validate(value)
-          res.status(400).send('"#{key}" is invalid')
-          return false
+      if Array.isArray(value)
+        for v in value
+          return false if not @_validateValue(key, v, res)
+      else
+        return false if not @_validateValue(key, value, res)
+    true
+
+  _validateValue: (key, value, res) ->
+    if @schema[key]?.$validate
+      if not @schema[key].$validate(value)
+        res.status(400).send('"#{key}" is invalid')
+        return false
+    if @schema[key]?.$match
+      if not @schema[key].$match.test(value)
+        res.status(400).send('"#{key}" is invalid')
+        return false
     true

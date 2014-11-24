@@ -17,7 +17,10 @@ schemaConfig =
       $validate: (value) ->
         /[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/.test(value)
       $find: fibrous (value) -> { 'day': $gte: value }
-    'containsDays': fibrous (days) -> { 'day': $in: days }
+    'containsDays':
+      $isArray: true
+      $match: /[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/
+      $find: fibrous (days) -> { 'day': $in: days }
   defaultQuery:
     day: $gte: '2014-09-19'
   defaultLimit: 6
