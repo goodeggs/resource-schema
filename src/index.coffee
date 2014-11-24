@@ -47,37 +47,38 @@ module.exports = class ResourceSchema
       return @_getAll
 
   _getAll: (req, res, next) =>
+    return if not @_validateObject(req.query, res)
+
     sendResources = (err, modelsFound) =>
       resources = modelsFound.map (modelFound) =>
         @_createResourceFromModel(modelFound, req.query.$select)
 
-      @_resolveResourceGetPromises(resources, modelsFound, {req, res}).then =>
+      @_applyGetters(resources, modelsFound, {req, res}).then =>
         res.body = resources
         next()
 
-    return if not @_validateObject(req.query, res)
-
     limit = @_getLimit req.query
     modelSelect = @_getModelSelectFields req.query
-    @_getQueryConfigPromise(req.query, {req, res})
-    .then (queryConfig) =>
+    @_getMongoQuery(req.query, {req, res}).then (mongoQuery) =>
+      # aggregate query
       if @options.groupBy
         modelQuery = @Model.aggregate()
-        modelQuery.match(queryConfig)
+        modelQuery.match(mongoQuery)
         modelQuery.group(@_getGroupQuery())
 
+      # non aggregate query
       if not @options.groupBy
-        modelQuery = @Model.find(queryConfig)
+        modelQuery = @Model.find(mongoQuery)
         modelQuery.select(modelSelect)
         modelQuery.lean()
 
       modelQuery.limit(limit) if limit?
       modelQuery.exec sendResources
-    .catch (e) ->
-      throw new Error(e)
 
   _getOne: (paramId) =>
     (req, res, next) =>
+      return if not @_validateObject(req.query, res)
+
       select = @_getModelSelectFields req.query
 
       idValue = req.params[paramId]
@@ -94,21 +95,23 @@ module.exports = class ResourceSchema
           return res.status(404).send "No #{paramId} found with id #{idValue}"
 
         resource = @_createResourceFromModel(modelFound, req.query.$select)
-        @_resolveResourceGetPromises([resource], [modelFound], {req, res}).then =>
+        @_applyGetters([resource], [modelFound], {req, res}).then =>
           res.body = resource
           next()
-        .catch (e) ->
-          throw new Error(e)
 
   ###
   Generate middleware to handle POST requests for resource
   ###
   post: ->
     (req, res, next) =>
+      return if not @_validateObject(req.query, res)
+
       resource = req.body
+      return if not @_validateObject(req.query, res)
+
       newModelData = @_createModelFromResource resource
-      @_resolveResourceSetPromises([resource], [newModelData], {req, res})
-      .then =>
+
+      @_applySetters([resource], [newModelData], {req, res}).then =>
         model = new @Model(newModelData)
         model.save (err, modelSaved) =>
           res.send 400, err if err
@@ -116,14 +119,14 @@ module.exports = class ResourceSchema
           res.status(201)
           res.body = resource
           next()
-      .catch (e) ->
-        throw new Error(e)
 
   ###
   Generate middleware to handle PUT requests for resource
   ###
   put: (paramId) ->
     (req, res, next) =>
+      return if not @_validateObject(req.query, res)
+
       newModelData = @_createModelFromResource req.body
 
       idValue = req.params[paramId]
@@ -133,7 +136,7 @@ module.exports = class ResourceSchema
       # if using mongoose timestamps plugin:
       # since we are not updating an instance of mongoose, we need to manually add the updatedAt timestamp
       # newModelData.updatedAt = new Date() if newModelData.updatedAt
-      @_resolveResourceSetPromises([req.body], [newModelData], {req, res}).then =>
+      @_applySetters([req.body], [newModelData], {req, res}).then =>
         @Model.findOneAndUpdate(query, newModelData, {upsert: true}).lean().exec (err, modelUpdated) =>
           res.send 400, err if err
           res.send 404, 'resource not found' if !modelUpdated
@@ -147,6 +150,8 @@ module.exports = class ResourceSchema
   ###
   delete: (paramId) ->
     (req, res, next) =>
+      return if not @_validateObject(req.query, res)
+
       idValue = req.params[paramId]
       query = {}
       query[paramId] = idValue
@@ -171,7 +176,7 @@ module.exports = class ResourceSchema
   ###
   Wait for all $find, and queryParams to resolve, and build the model query with the results
   ###
-  _getQueryConfigPromise: (requestQuery, {req, res}) =>
+  _getMongoQuery: (requestQuery, {req, res}) =>
     modelQuery = clone(@options.defaultQuery) or {}
     deferred = q.defer()
     queryPromises = []
@@ -228,7 +233,7 @@ module.exports = class ResourceSchema
   ###
   Wait for all $set queries to update models
   ###
-  _resolveResourceSetPromises: (resources, models, {req, res}) =>
+  _applySetters: (resources, models, {req, res}) =>
     setPromises = []
     for resourceField, config of @schema
       if config.$set
@@ -240,7 +245,7 @@ module.exports = class ResourceSchema
   ###
   Wait for all $get queries to update resources
   ###
-  _resolveResourceGetPromises: (resources, models, {req, res}) =>
+  _applyGetters: (resources, models, {req, res}) =>
     getPromises = []
     resourceSelectFields = @_getResourceSelectFields(req.query)
     for resourceField, config of @schema
@@ -337,21 +342,6 @@ module.exports = class ResourceSchema
     _(modelSelectFields).compact().join(' ')
 
   ###
-  Select valid properties from query that can be used for filtering resources
-  @param [Object] query - query params from client
-  @returns [Object] valid query fields and their values
-  ###
-  # _selectValidQuerySearchFields: (query) =>
-  #   return {} if not @options.queryParams
-  #   queryDotString = @_convertKeysToDotStrings query
-  #   queryParamFields = Object.keys @options.queryParams
-  #   validFields = {}
-  #   for field, value of queryDotString
-  #     if field in queryParamFields
-  #       dot.set validFields, field, value
-  #   @_convertKeysToDotStrings validFields
-
-  ###
   Select valid properties from query that can be used for filtering resources in the schema
   @param [Object] query - query params from client
   @returns [Object] valid resource search fields and their values
@@ -366,7 +356,7 @@ module.exports = class ResourceSchema
     @_convertKeysToDotStrings validFields
 
   ###
-  Collapse all nested fields dot format
+  Collapse all nested fields to dot format
   @example {a: {b: 1}} -> {'a.b': 1}
   ###
   _convertKeysToDotStrings: (obj) =>
