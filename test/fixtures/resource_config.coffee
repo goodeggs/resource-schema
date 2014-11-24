@@ -14,10 +14,12 @@ schema =
 schemaConfig =
   queryParams:
     'startDate':
+      $type: String
       $validate: (value) ->
         /[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/.test(value)
       $find: fibrous (value) -> { 'day': $gte: value }
     'containsDays':
+      $type: String
       $isArray: true
       $match: /[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/
       $find: fibrous (days) -> { 'day': $in: days }

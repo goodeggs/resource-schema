@@ -11,6 +11,8 @@ RESERVED_KEYWORDS = [
   '$optional'
   '$validate'
   '$match'
+  '$type'
+  '$isArray'
 ]
 
 ###
@@ -35,7 +37,7 @@ module.exports = class ResourceSchema
     if schema
       @schema = @_normalizeSchema(schema)
     else
-      @schema = @_getSchemaFromModel(@Model)
+      @schema = @_generateSchemaFromModel(@Model)
 
   ###
   Generate middleware to handle GET requests for resource
@@ -47,7 +49,7 @@ module.exports = class ResourceSchema
       return @_getAll
 
   _getAll: (req, res, next) =>
-    return if not @_validateObject(req.query, res)
+    return if not @_isValid(req.query, res)
 
     sendResources = (err, modelsFound) =>
       resources = modelsFound.map (modelFound) =>
@@ -77,7 +79,7 @@ module.exports = class ResourceSchema
 
   _getOne: (paramId) =>
     (req, res, next) =>
-      return if not @_validateObject(req.query, res)
+      return if not @_isValid(req.query, res)
 
       select = @_getModelSelectFields req.query
 
@@ -89,11 +91,8 @@ module.exports = class ResourceSchema
       modelQuery.select(select) if select?
       modelQuery.lean()
       modelQuery.exec (err, modelFound) =>
-        if err
-          return res.status(400).send err
-        if not modelFound?
-          return res.status(404).send "No #{paramId} found with id #{idValue}"
-
+        return res.status(400).send(err) if err
+        return res.status(404).send("No #{paramId} found with id #{idValue}") if not modelFound?
         resource = @_createResourceFromModel(modelFound, req.query.$select)
         @_applyGetters([resource], [modelFound], {req, res}).then =>
           res.body = resource
@@ -104,17 +103,15 @@ module.exports = class ResourceSchema
   ###
   post: ->
     (req, res, next) =>
-      return if not @_validateObject(req.query, res)
-
+      return if not @_isValid(req.query, res)
       resource = req.body
-      return if not @_validateObject(req.query, res)
-
+      return if not @_isValid(resource, res)
+      @_convertTypes(resource, res)
       newModelData = @_createModelFromResource resource
-
       @_applySetters([resource], [newModelData], {req, res}).then =>
         model = new @Model(newModelData)
         model.save (err, modelSaved) =>
-          res.send 400, err if err
+          return res.status(400).send(err) if err
           resource = @_createResourceFromModel(modelSaved, req.query.$select)
           res.status(201)
           res.body = resource
@@ -125,8 +122,8 @@ module.exports = class ResourceSchema
   ###
   put: (paramId) ->
     (req, res, next) =>
-      return if not @_validateObject(req.query, res)
-
+      return if not @_isValid(req.query, res)
+      return if not @_isValid(req.body, res)
       newModelData = @_createModelFromResource req.body
 
       idValue = req.params[paramId]
@@ -138,8 +135,8 @@ module.exports = class ResourceSchema
       # newModelData.updatedAt = new Date() if newModelData.updatedAt
       @_applySetters([req.body], [newModelData], {req, res}).then =>
         @Model.findOneAndUpdate(query, newModelData, {upsert: true}).lean().exec (err, modelUpdated) =>
-          res.send 400, err if err
-          res.send 404, 'resource not found' if !modelUpdated
+          return res.send 400, err if err
+          return res.send 404, 'resource not found' if !modelUpdated
           resource = @_createResourceFromModel(modelUpdated, req.query.$select)
           res.status(200)
           res.body = resource
@@ -150,17 +147,15 @@ module.exports = class ResourceSchema
   ###
   delete: (paramId) ->
     (req, res, next) =>
-      return if not @_validateObject(req.query, res)
+      return if not @_isValid(req.query, res)
 
       idValue = req.params[paramId]
       query = {}
       query[paramId] = idValue
 
       @Model.findOneAndRemove query, (err, removedInstance) =>
-        res.send 400, err if err
-
-        if !removedInstance?
-          res.send(404, "Resource with id #{idValue} not found from #{@Model.modelName} collection")
+        return res.status(400).send(err) if err
+        res.status(404).send("Resource with id #{idValue} not found from #{@Model.modelName} collection") if !removedInstance?
 
         res.status(204)
         res.body = "Resource with id #{idValue} successfully deleted from #{@Model.modelName} collection"
@@ -181,6 +176,7 @@ module.exports = class ResourceSchema
     deferred = q.defer()
     queryPromises = []
     resourceSearchFields = @_selectValidResourceSearchFields requestQuery
+    @_convertTypes(resourceSearchFields)
 
     if resourceSearchFields
       for resourceField, value of resourceSearchFields
@@ -381,7 +377,7 @@ module.exports = class ResourceSchema
     modelFields = resourceFields.map (resourceField) => @schema[resourceField].$field
     [_.compact(resourceFields), _.compact(modelFields)]
 
-  _getSchemaFromModel: (Model) =>
+  _generateSchemaFromModel: (Model) =>
     # Paths already in dot notation
     schemaKeys = Object.keys Model.schema.paths
     schemaKeys.splice schemaKeys.indexOf('__v'), 1
@@ -421,11 +417,11 @@ module.exports = class ResourceSchema
       else
         normalizedSchema[key] = config
 
-    _(normalizedSchema).extend(@_getNormalizedQueryParams())
+    _(normalizedSchema).extend(@_normalizeQueryParams())
 
     normalizedSchema
 
-  _getNormalizedQueryParams: =>
+  _normalizeQueryParams: =>
     normalizedParams = {}
     if @options.queryParams
       for param, config of @options.queryParams
@@ -452,7 +448,7 @@ module.exports = class ResourceSchema
         obj[key] = config
     obj
 
-  _validateObject: (obj, res) ->
+  _isValid: (obj, res) ->
     normalizedObj = @_convertKeysToDotStrings(obj)
     for key, value of normalizedObj
       if Array.isArray(value)
@@ -465,10 +461,61 @@ module.exports = class ResourceSchema
   _validateValue: (key, value, res) ->
     if @schema[key]?.$validate
       if not @schema[key].$validate(value)
-        res.status(400).send('"#{key}" is invalid')
+        res.status(400).send("'#{key}' is invalid")
         return false
     if @schema[key]?.$match
       if not @schema[key].$match.test(value)
-        res.status(400).send('"#{key}" is invalid')
+        res.status(400).send("'#{key}' is invalid")
         return false
     true
+
+  ###
+  By default, all query parameters are sent as strings.
+  This method converts those strings to the appropriate types for data manipulation
+  Supports:
+  - String
+  - Date
+  - Number
+  - Boolean
+  - mongoose.Types.ObjectId and other newable objects
+  TODO: needs to be tested
+  ###
+  _convertTypes: (obj, res) ->
+    send400 = (type, key, value) =>
+      return res.status(400).send("'#{value}' is an invalid Date for field '#{key}'")
+
+    convert = (key, value) =>
+      switch @schema[key].$type
+        when String
+          return value
+        when Number
+          number = parseFloat(value)
+          send400('Number', key, value) if isNaN(number)
+          return number
+        when Boolean
+          if (value is 'true') or (value is true)
+            return true
+          else if (value is 'false') or (value is true)
+            return false
+          else
+            send400('Boolean', key, value)
+        when Date
+          date = new Date(value)
+          send400('Date', key, value) if isNaN(date.getTime())
+          return date
+        # mongoose.Types.ObjectId, etc.
+        else
+          try
+            newValue = new @schema[key].$type(value)
+            return newValue
+          catch e
+            res.status(400).send e
+
+    for key, value of obj
+      continue if not @schema[key]?.$type?
+      if @schema[key]?.$isArray
+        obj[key] = array = [value] if not Array.isArray(value)
+        for i, v of array
+          array[i] = convert(key, v)
+      else
+        obj[key] = convert(key, value)
