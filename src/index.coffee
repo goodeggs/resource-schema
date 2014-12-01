@@ -2,6 +2,7 @@ dot = require 'dot-component'
 _ = require 'underscore'
 q = require 'q'
 clone = require 'clone'
+deepExtend = require './deep_extend'
 
 RESERVED_KEYWORDS = [
   '$find'
@@ -183,7 +184,7 @@ module.exports = class ResourceSchema
         if @schema[resourceField].$find
           d = q.defer()
           @schema[resourceField].$find value, {req, res}, (err, query) =>
-            @_deepExtend(modelQuery, query)
+            deepExtend(modelQuery, query)
             d.resolve()
           queryPromises.push(d.promise)
         else if @schema[resourceField].$field
@@ -299,7 +300,8 @@ module.exports = class ResourceSchema
     _.union(resourceSelectFields, @_getAddFields(query))
 
   ###
-  Get all valid $add fields from the query. Used to select $optional fields from schema
+  Get all valid $add fields from the query. The add fields are used to
+  select $optional fields from schema
   @param [Object] query - query params from client
   @returns [Array] valid keys to add from schema
   ###
@@ -436,39 +438,27 @@ module.exports = class ResourceSchema
     normalizedParams
 
   ###
-  Extends two levels deep, so that we can extend query configuration objects without overwritting previous queries for the same property
-  # deep extend so that we can add multiple queries to any given property
-  # e.g. {'day': $gt: '2014-10-1'}, {day: $lt: '2014-11-1'} =>
-  # {'day': $gt: '2014-10-1', $lt: '2014-11-1'}
+  Check validity of object with $validate and $match on schema
   ###
-  _deepExtend: (obj, obj2) ->
-    for key, config of obj2
-      if obj[key]? and typeof config is 'object'
-        for newKey, newValue of config
-          obj[key][newKey] = newValue
-      else
-        obj[key] = config
-    obj
-
   _isValid: (obj, res) ->
+    validateValue = (key, value, res) =>
+      if @schema[key]?.$validate
+        if not @schema[key].$validate(value)
+          res.status(400).send("'#{key}' is invalid")
+          return false
+      if @schema[key]?.$match
+        if not @schema[key].$match.test(value)
+          res.status(400).send("'#{key}' is invalid")
+          return false
+      true
+
     normalizedObj = @_convertKeysToDotStrings(obj)
     for key, value of normalizedObj
       if Array.isArray(value)
         for v in value
-          return false if not @_validateValue(key, v, res)
+          return false if not validateValue(key, v, res)
       else
-        return false if not @_validateValue(key, value, res)
-    true
-
-  _validateValue: (key, value, res) ->
-    if @schema[key]?.$validate
-      if not @schema[key].$validate(value)
-        res.status(400).send("'#{key}' is invalid")
-        return false
-    if @schema[key]?.$match
-      if not @schema[key].$match.test(value)
-        res.status(400).send("'#{key}' is invalid")
-        return false
+        return false if not validateValue(key, value, res)
     true
 
   ###
