@@ -352,7 +352,8 @@ module.exports = class ResourceSchema
     @_convertKeysToDotStrings validFields
 
   ###
-  Collapse all nested fields to dot format
+  Collapse all nested fields to dot format. Ignore Reserved Keywords.
+  This is used for the schema, the query params, and the incoming resources
   @example {a: {b: 1}} -> {'a.b': 1}
   ###
   _convertKeysToDotStrings: (obj) =>
@@ -363,6 +364,7 @@ module.exports = class ResourceSchema
         if key in RESERVED_KEYWORDS
           dotKeys[current] ?= {}
           dotKeys[current][key] = value
+        # do not dot stringify array
         else if Array.isArray value
           dotKeys[newKey] = value
         else if value and typeof value is "object"
