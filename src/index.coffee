@@ -514,8 +514,8 @@ module.exports = class ResourceSchema
     for key, value of obj
       continue if not @schema[key]?.$type?
       if @schema[key]?.$isArray
-        obj[key] = array = [value] if not Array.isArray(value)
-        for i, v of array
-          array[i] = convert(key, v)
+        obj[key] = [value] if not Array.isArray(value)
+        for i, v of obj[key]
+          obj[key][i] = convert(key, v)
       else
         obj[key] = convert(key, value)

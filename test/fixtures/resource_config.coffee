@@ -23,6 +23,7 @@ schemaConfig =
       $isArray: true
       $match: /[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/
       $find: fibrous (days) -> { 'day': $in: days }
+
   defaultQuery:
     day: $gte: '2014-09-19'
   defaultLimit: 6
