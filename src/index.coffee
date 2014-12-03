@@ -109,8 +109,9 @@ module.exports = class ResourceSchema
       context = {req, res, next}
       return if not @_isValid(req.query, context)
       resource = req.body
+      return res.status(400).send('POST requests must contain a body') if not resource? or _.isEmpty(resource)
       return if not @_isValid(resource, context)
-      @_convertTypes(resource, res)
+      @_convertTypes(resource, {req, res, next})
       newModelData = @_createModelFromResource resource
       @_applySetters([resource], [newModelData], context).then =>
         model = new @Model(newModelData)
@@ -128,6 +129,7 @@ module.exports = class ResourceSchema
     (req, res, next) =>
       context = {req, res, next}
       return if not @_isValid(req.query, context)
+      return res.status(400).send('PUT requests must contain a body') if not req.body? or _.isEmpty(req.body)
       return if not @_isValid(req.body, context)
       newModelData = @_createModelFromResource req.body
 
@@ -182,16 +184,18 @@ module.exports = class ResourceSchema
     deferred = q.defer()
     queryPromises = []
     resourceSearchFields = @_selectValidResourceSearchFields requestQuery
-    @_convertTypes(resourceSearchFields)
+    @_convertTypes(resourceSearchFields, {req, res, next})
 
     if resourceSearchFields
       for resourceField, value of resourceSearchFields
         if @schema[resourceField].$find
-          d = q.defer()
-          @schema[resourceField].$find value, {req, res, next}, (err, query) =>
-            deepExtend(modelQuery, query)
-            d.resolve()
-          queryPromises.push(d.promise)
+          do =>
+            d = q.defer()
+            @schema[resourceField].$find value, {req, res, next}, (err, query) =>
+              return res.status(400).send (err.toString()) if err
+              deepExtend(modelQuery, query)
+              d.resolve()
+            queryPromises.push(d.promise)
         else if @schema[resourceField].$field
           modelQuery[@schema[resourceField].$field] = value
 
@@ -239,9 +243,12 @@ module.exports = class ResourceSchema
     setPromises = []
     for resourceField, config of @schema
       if config.$set
-        d = q.defer()
-        config.$set(models, {req, res, next, resources}, (err, results) -> d.resolve())
-        setPromises.push d.promise
+        do =>
+          d = q.defer()
+          config.$set models, {req, res, next, resources}, (err, results) ->
+            return res.status(400).send err.toString() if err
+            d.resolve()
+          setPromises.push d.promise
     return q.all setPromises
 
   ###
@@ -253,10 +260,10 @@ module.exports = class ResourceSchema
     for resourceField, config of @schema
       if config.$get and typeof config.$get is 'function' and resourceField in resourceSelectFields
         # need to wrap in closure, otherwise we overwrite original promise references
-        do ->
+        do =>
           d = q.defer()
           config.$get resources, {req, res, next, models}, (err, results) ->
-            throw new Error(err) if err
+            return res.status(400).send err.toString() if err
             d.resolve()
           getPromises.push d.promise
     return q.all getPromises
@@ -477,7 +484,7 @@ module.exports = class ResourceSchema
   - mongoose.Types.ObjectId and other newable objects
   TODO: needs to be tested
   ###
-  _convertTypes: (obj, res) ->
+  _convertTypes: (obj, {req, res, next}) ->
     send400 = (type, key, value) =>
       return res.status(400).send("'#{value}' is an invalid Date for field '#{key}'")
 
@@ -506,7 +513,7 @@ module.exports = class ResourceSchema
             newValue = new @schema[key].$type(value)
             return newValue
           catch e
-            res.status(400).send e
+            res.status(400).send e.toString()
 
     for key, value of obj
       continue if not @schema[key]?.$type?

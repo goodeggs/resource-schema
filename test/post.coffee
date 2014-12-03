@@ -34,3 +34,14 @@ describe '.post()', ->
     expect(modelsFound[0].product.name).to.equal 'apples'
     expect(modelsFound[0].product.price).to.equal 25
     expect(modelsFound[0].name).to.equal 'test'
+
+describe 'POSTing without body data', ->
+  before fibrous ->
+    Model.sync.remove()
+
+    response = request.sync.post
+      url: "http://127.0.0.1:4000/resource"
+
+  it 'returns 400, invalid request', fibrous ->
+    expect(response.statusCode).to.equal 400
+    expect(response.body).to.equal 'POST requests must contain a body'
