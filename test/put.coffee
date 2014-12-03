@@ -97,14 +97,3 @@ describe '.put(id)', ->
     it 'sets the value to lowercase when saved', fibrous ->
       model = Model.sync.findOne()
       expect(model.name).to.equal 'goodbye'
-
-  describe 'PUTing without body data', ->
-    before fibrous ->
-      Model.sync.remove()
-
-      response = request.sync.put
-        url: "http://127.0.0.1:4000/resource/#{new mongoose.Types.ObjectId()}"
-
-    it 'returns 400, invalid request', fibrous ->
-      expect(response.statusCode).to.equal 400
-      expect(response.body).to.equal 'PUT requests must contain a body'

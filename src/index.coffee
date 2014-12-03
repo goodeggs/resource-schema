@@ -109,7 +109,6 @@ module.exports = class ResourceSchema
       context = {req, res, next}
       return if not @_isValid(req.query, context)
       resource = req.body
-      return res.status(400).send('POST requests must contain a body') if not resource? or _.isEmpty(resource)
       return if not @_isValid(resource, context)
       @_convertTypes(resource, {req, res, next})
       newModelData = @_createModelFromResource resource
@@ -129,7 +128,6 @@ module.exports = class ResourceSchema
     (req, res, next) =>
       context = {req, res, next}
       return if not @_isValid(req.query, context)
-      return res.status(400).send('PUT requests must contain a body') if not req.body? or _.isEmpty(req.body)
       return if not @_isValid(req.body, context)
       newModelData = @_createModelFromResource req.body
 
