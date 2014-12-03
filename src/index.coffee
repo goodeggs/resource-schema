@@ -50,19 +50,20 @@ module.exports = class ResourceSchema
       return @_getAll
 
   _getAll: (req, res, next) =>
-    return if not @_isValid(req.query, res)
+    context = {req, res, next}
+    return if not @_isValid(req.query, context)
 
     sendResources = (err, modelsFound) =>
       resources = modelsFound.map (modelFound) =>
         @_createResourceFromModel(modelFound, req.query.$select)
 
-      @_applyGetters(resources, modelsFound, {req, res}).then =>
+      @_applyGetters(resources, modelsFound, context).then =>
         res.body = resources
         next()
 
     limit = @_getLimit req.query
     modelSelect = @_getModelSelectFields req.query
-    @_getMongoQuery(req.query, {req, res}).then (mongoQuery) =>
+    @_getMongoQuery(req.query, context).then (mongoQuery) =>
       # aggregate query
       if @options.groupBy
         modelQuery = @Model.aggregate()
@@ -80,7 +81,8 @@ module.exports = class ResourceSchema
 
   _getOne: (paramId) =>
     (req, res, next) =>
-      return if not @_isValid(req.query, res)
+      context = {req, res, next}
+      return if not @_isValid(req.query, context)
 
       select = @_getModelSelectFields req.query
 
@@ -95,7 +97,7 @@ module.exports = class ResourceSchema
         return res.status(400).send(err) if err
         return res.status(404).send("No #{paramId} found with id #{idValue}") if not modelFound?
         resource = @_createResourceFromModel(modelFound, req.query.$select)
-        @_applyGetters([resource], [modelFound], {req, res}).then =>
+        @_applyGetters([resource], [modelFound], context).then =>
           res.body = resource
           next()
 
@@ -104,12 +106,13 @@ module.exports = class ResourceSchema
   ###
   post: ->
     (req, res, next) =>
-      return if not @_isValid(req.query, res)
+      context = {req, res, next}
+      return if not @_isValid(req.query, context)
       resource = req.body
-      return if not @_isValid(resource, res)
+      return if not @_isValid(resource, context)
       @_convertTypes(resource, res)
       newModelData = @_createModelFromResource resource
-      @_applySetters([resource], [newModelData], {req, res}).then =>
+      @_applySetters([resource], [newModelData], context).then =>
         model = new @Model(newModelData)
         model.save (err, modelSaved) =>
           return res.status(400).send(err) if err
@@ -123,8 +126,9 @@ module.exports = class ResourceSchema
   ###
   put: (paramId) ->
     (req, res, next) =>
-      return if not @_isValid(req.query, res)
-      return if not @_isValid(req.body, res)
+      context = {req, res, next}
+      return if not @_isValid(req.query, context)
+      return if not @_isValid(req.body, context)
       newModelData = @_createModelFromResource req.body
 
       idValue = req.params[paramId]
@@ -134,7 +138,7 @@ module.exports = class ResourceSchema
       # if using mongoose timestamps plugin:
       # since we are not updating an instance of mongoose, we need to manually add the updatedAt timestamp
       # newModelData.updatedAt = new Date() if newModelData.updatedAt
-      @_applySetters([req.body], [newModelData], {req, res}).then =>
+      @_applySetters([req.body], [newModelData], context).then =>
         @Model.findOneAndUpdate(query, newModelData, {upsert: true}).lean().exec (err, modelUpdated) =>
           return res.send 400, err if err
           return res.send 404, 'resource not found' if !modelUpdated
@@ -148,7 +152,8 @@ module.exports = class ResourceSchema
   ###
   delete: (paramId) ->
     (req, res, next) =>
-      return if not @_isValid(req.query, res)
+      context = {req, res, next}
+      return if not @_isValid(req.query, context)
 
       idValue = req.params[paramId]
       query = {}
@@ -172,7 +177,7 @@ module.exports = class ResourceSchema
   ###
   Wait for all $find, and queryParams to resolve, and build the model query with the results
   ###
-  _getMongoQuery: (requestQuery, {req, res}) =>
+  _getMongoQuery: (requestQuery, {req, res, next}) =>
     modelQuery = clone(@options.defaultQuery) or {}
     deferred = q.defer()
     queryPromises = []
@@ -183,7 +188,7 @@ module.exports = class ResourceSchema
       for resourceField, value of resourceSearchFields
         if @schema[resourceField].$find
           d = q.defer()
-          @schema[resourceField].$find value, {req, res}, (err, query) =>
+          @schema[resourceField].$find value, {req, res, next}, (err, query) =>
             deepExtend(modelQuery, query)
             d.resolve()
           queryPromises.push(d.promise)
@@ -230,19 +235,19 @@ module.exports = class ResourceSchema
   ###
   Wait for all $set queries to update models
   ###
-  _applySetters: (resources, models, {req, res}) =>
+  _applySetters: (resources, models, {req, res, next}) =>
     setPromises = []
     for resourceField, config of @schema
       if config.$set
         d = q.defer()
-        config.$set(models, {req, res, resources}, (err, results) -> d.resolve())
+        config.$set(models, {req, res, next, resources}, (err, results) -> d.resolve())
         setPromises.push d.promise
     return q.all setPromises
 
   ###
   Wait for all $get queries to update resources
   ###
-  _applyGetters: (resources, models, {req, res}) =>
+  _applyGetters: (resources, models, {req, res, next}) =>
     getPromises = []
     resourceSelectFields = @_getResourceSelectFields(req.query)
     for resourceField, config of @schema
@@ -250,7 +255,7 @@ module.exports = class ResourceSchema
         # need to wrap in closure, otherwise we overwrite original promise references
         do ->
           d = q.defer()
-          config.$get resources, {req, res, models}, (err, results) ->
+          config.$get resources, {req, res, next, models}, (err, results) ->
             throw new Error(err) if err
             d.resolve()
           getPromises.push d.promise
@@ -440,7 +445,7 @@ module.exports = class ResourceSchema
   ###
   Check validity of object with $validate and $match on schema
   ###
-  _isValid: (obj, res) ->
+  _isValid: (obj, {req, res, next}) ->
     validateValue = (key, value, res) =>
       if @schema[key]?.$validate
         if not @schema[key].$validate(value)
