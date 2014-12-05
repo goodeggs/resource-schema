@@ -309,6 +309,29 @@ Add an $optional field to the response. See $optional schema fields for more det
 GET /products?$add=quantitySold
 ```
 
+## Working with nested attributes in schemas
+
+List just the nested attributes you care about:
+
+``` coffee
+'user.name'
+'user.email'
+```
+
+Or include the root attribute to include all nested attributes:
+
+``` coffee
+'user'
+```
+
+You can even add optional attributes:
+
+``` coffee
+'user'
+'user.note':
+  $optional: true
+```
+
 ## Contributing
 
 ```
