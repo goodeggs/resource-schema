@@ -12,9 +12,9 @@ schemaOptions =
 schema =
   name: 'name'
   total:
-    $get: $sum: 1
+    get: $sum: 1
   parentName:
-    $find: fibrous (searchValue) ->
+    find: fibrous (searchValue) ->
       parentModel = ParentModel.sync.findOne(name: searchValue)
       return {_id: $in: parentModel.modelIds}
 

@@ -12,7 +12,8 @@ schemaOptions =
 schema =
   name: 'name'
   lastName: 'lastName'
-  total: $get: $sum: 1
+  total:
+    get: $sum: 1
 
 resource = new ResourceSchema Model, schema, schemaOptions
 

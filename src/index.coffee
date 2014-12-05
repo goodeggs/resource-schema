@@ -5,30 +5,30 @@ clone = require 'clone'
 deepExtend = require './deep_extend'
 
 RESERVED_KEYWORDS = [
-  '$find'
-  '$get'
-  '$set'
-  '$field'
-  '$optional'
-  '$validate'
-  '$match'
-  '$type'
-  '$isArray'
+  'find'
+  'get'
+  'set'
+  'field'
+  'optional'
+  'validate'
+  'match'
+  'type'
+  'isArray'
 ]
 
 ###
 normalized schema:
 {
   normalField: {
-    $optional: true
-    $field: 'test.name'
+    optional: true
+    field: 'test.name'
   },
   dynamicField: {
-    $validate: (value) ->
+    validate: (value) ->
     match: ->
-    $find: (value, done) ->
-    $get: (resources, request, done) ->
-    $set: (models, request, done) ->
+    find: (value, done) ->
+    get: (resources, request, done) ->
+    set: (models, request, done) ->
   }
 }
 ###
@@ -175,7 +175,7 @@ module.exports = class ResourceSchema
     res.send res.body
 
   ###
-  Wait for all $find, and queryParams to resolve, and build the model query with the results
+  Wait for all find, and queryParams to resolve, and build the model query with the results
   ###
   _getMongoQuery: (requestQuery, {req, res, next}) =>
     modelQuery = clone(@options.defaultQuery) or {}
@@ -186,16 +186,16 @@ module.exports = class ResourceSchema
 
     if resourceSearchFields
       for resourceField, value of resourceSearchFields
-        if @schema[resourceField].$find
+        if @schema[resourceField].find
           do =>
             d = q.defer()
-            @schema[resourceField].$find value, {req, res, next}, (err, query) =>
+            @schema[resourceField].find value, {req, res, next}, (err, query) =>
               return res.status(400).send (err.toString()) if err
               deepExtend(modelQuery, query)
               d.resolve()
             queryPromises.push(d.promise)
-        else if @schema[resourceField].$field
-          modelQuery[@schema[resourceField].$field] = value
+        else if @schema[resourceField].field
+          modelQuery[@schema[resourceField].field] = value
 
     q.all(queryPromises).then ->
       deferred.resolve(modelQuery)
@@ -205,9 +205,9 @@ module.exports = class ResourceSchema
   _createModelFromResource: (resource) =>
     model = {}
     for resourceField, config of @schema
-      if config.$field
+      if config.field
         value = dot.get resource, resourceField
-        dot.set(model, config.$field, value) if value isnt undefined
+        dot.set(model, config.field, value) if value isnt undefined
     model
 
   _createResourceFromModel: (model, resourceSelectFields) =>
@@ -225,42 +225,42 @@ module.exports = class ResourceSchema
     for resourceField, config of @schema
       # TODO set default select to all fields?
       if fieldIsSelectable = !resourceSelectFields? or resourceField in resourceSelectFields
-        if config.$field
-          value = dot.get model, config.$field
+        if config.field
+          value = dot.get model, config.field
           dot.set(resource, resourceField, value)
         # TODO: helper for this
-        if config.$get and typeof config.$get is 'object'
+        if config.get and typeof config.get is 'object'
           value = model[resourceField]
           dot.set(resource, resourceField, value)
     resource
 
   ###
-  Wait for all $set queries to update models
+  Wait for all set queries to update models
   ###
   _applySetters: (resources, models, {req, res, next}) =>
     setPromises = []
     for resourceField, config of @schema
-      if config.$set
+      if config.set
         do =>
           d = q.defer()
-          config.$set models, {req, res, next, resources}, (err, results) ->
+          config.set models, {req, res, next, resources}, (err, results) ->
             return res.status(400).send err.toString() if err
             d.resolve()
           setPromises.push d.promise
     return q.all setPromises
 
   ###
-  Wait for all $get queries to update resources
+  Wait for all get queries to update resources
   ###
   _applyGetters: (resources, models, {req, res, next}) =>
     getPromises = []
     resourceSelectFields = @_getResourceSelectFields(req.query)
     for resourceField, config of @schema
-      if config.$get and typeof config.$get is 'function' and resourceField in resourceSelectFields
+      if config.get and typeof config.get is 'function' and resourceField in resourceSelectFields
         # need to wrap in closure, otherwise we overwrite original promise references
         do =>
           d = q.defer()
-          config.$get resources, {req, res, next, models}, (err, results) ->
+          config.get resources, {req, res, next, models}, (err, results) ->
             return res.status(400).send err.toString() if err
             d.resolve()
           getPromises.push d.promise
@@ -278,10 +278,10 @@ module.exports = class ResourceSchema
 
     #set all other fields
     for field, config of @schema
-      if config.$field
-        groupQuery[field] = $first: '$' + config.$field
-      else if config.$get and typeof config.$get is 'object'
-        groupQuery[field] = config.$get
+      if config.field
+        groupQuery[field] = $first: '$' + config.field
+      else if config.get and typeof config.get is 'object'
+        groupQuery[field] = config.get
     groupQuery
 
   ###
@@ -305,13 +305,13 @@ module.exports = class ResourceSchema
         select = select.split(' ') if typeof select is 'string'
         _(select).intersection resourceFields
       else
-        _(resourceFields).reject (resourceField) => @schema[resourceField].$optional
+        _(resourceFields).reject (resourceField) => @schema[resourceField].optional
 
     _.union(resourceSelectFields, @_getAddFields(query))
 
   ###
   Get all valid $add fields from the query. The add fields are used to
-  select $optional fields from schema
+  select optional fields from schema
   @param [Object] query - query params from client
   @returns [Array] valid keys to add from schema
   ###
@@ -341,11 +341,11 @@ module.exports = class ResourceSchema
       if select
         select = select.split(' ') if typeof select is 'string'
         resourceSelectFields = _(select).intersection resourceFields
-        resourceSelectFields.map (resourceSelectField) => @schema[resourceSelectField].$field
+        resourceSelectFields.map (resourceSelectField) => @schema[resourceSelectField].field
       else
         resourceFields.map (resourceField) =>
-          if @schema[resourceField].$field and (not @schema[resourceField].$optional or resourceField in addFields)
-            @schema[resourceField].$field
+          if @schema[resourceField].field and (not @schema[resourceField].optional or resourceField in addFields)
+            @schema[resourceField].field
 
     _(modelSelectFields).compact().join(' ')
 
@@ -388,7 +388,7 @@ module.exports = class ResourceSchema
 
   _getResourceAndModelFields: =>
     resourceFields = Object.keys @schema
-    modelFields = resourceFields.map (resourceField) => @schema[resourceField].$field
+    modelFields = resourceFields.map (resourceField) => @schema[resourceField].field
     [_.compact(resourceFields), _.compact(modelFields)]
 
   _generateSchemaFromModel: (Model) =>
@@ -398,13 +398,13 @@ module.exports = class ResourceSchema
     schema = {}
     for schemaKey in schemaKeys
       schema[schemaKey] =
-        $field: schemaKey
+        field: schemaKey
     schema
 
   ###
   Convert resource schema to standard format for easier manipulation
   - converts all keys to dot strings
-  - Adds $field, if using implicit model field syntax
+  - Adds field, if using implicit model field syntax
   @example
     {
       'test': {
@@ -414,7 +414,7 @@ module.exports = class ResourceSchema
     =>
     {
       'test.property': {
-        $field: 'test'
+        field: 'test'
       }
     }
   ###
@@ -425,7 +425,7 @@ module.exports = class ResourceSchema
       if typeof config is 'string'
         if @Model
           normalizedSchema[key] =
-            $field: config
+            field: config
         else
           throw new Error "No model provided for field #{key}, and no default model provided"
       else
@@ -440,7 +440,7 @@ module.exports = class ResourceSchema
     if @options.queryParams
       for param, config of @options.queryParams
         if typeof config is 'function'
-          normalizedParams[param] = $find: config
+          normalizedParams[param] = find: config
         else if typeof config is 'object'
           normalizedParams[param] = config
         else
@@ -448,16 +448,16 @@ module.exports = class ResourceSchema
     normalizedParams
 
   ###
-  Check validity of object with $validate and $match on schema
+  Check validity of object with validate and match on schema
   ###
   _isValid: (obj, {req, res, next}) ->
     validateValue = (key, value, res) =>
-      if @schema[key]?.$validate
-        if not @schema[key].$validate(value)
+      if @schema[key]?.validate
+        if not @schema[key].validate(value)
           res.status(400).send("'#{key}' is invalid")
           return false
-      if @schema[key]?.$match
-        if not @schema[key].$match.test(value)
+      if @schema[key]?.match
+        if not @schema[key].match.test(value)
           res.status(400).send("'#{key}' is invalid")
           return false
       true
@@ -487,7 +487,7 @@ module.exports = class ResourceSchema
       return res.status(400).send("'#{value}' is an invalid Date for field '#{key}'")
 
     convert = (key, value) =>
-      switch @schema[key].$type
+      switch @schema[key].type
         when String
           return value
         when Number
@@ -508,14 +508,14 @@ module.exports = class ResourceSchema
         # mongoose.Types.ObjectId, etc.
         else
           try
-            newValue = new @schema[key].$type(value)
+            newValue = new @schema[key].type(value)
             return newValue
           catch e
             res.status(400).send e.toString()
 
     for key, value of obj
-      continue if not @schema[key]?.$type?
-      if @schema[key]?.$isArray
+      continue if not @schema[key]?.type?
+      if @schema[key]?.isArray
         obj[key] = [value] if not Array.isArray(value)
         for i, v of obj[key]
           obj[key][i] = convert(key, v)
