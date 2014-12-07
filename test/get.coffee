@@ -24,7 +24,7 @@ describe '.get()', ->
       expect(response.body.length).to.equal 1
       expect(response.body[0].name).to.equal 'test'
 
-  describe 'optional field', ->
+  describe 'optional: [Boolean]', ->
     before fibrous ->
       Model.sync.remove()
       targetId = new mongoose.Types.ObjectId()
@@ -35,7 +35,7 @@ describe '.get()', ->
         name: 'test2'
         productCount: 3
 
-    it 'adds optional field with $add query parameter', fibrous ->
+    it 'adds optional field with add query parameter', fibrous ->
       response = request.sync.get
         url: 'http://127.0.0.1:4000/resource?$add=productCount',
         json: true
@@ -43,7 +43,7 @@ describe '.get()', ->
       expect(response.body[0].productCount).to.equal 5
       expect(response.body[1].productCount).to.equal 3
 
-    it 'adds optional $get field with $add query parameter', fibrous ->
+    it 'adds optional get field with $add query parameter', fibrous ->
       response = request.sync.get
         url: 'http://127.0.0.1:4000/resource?$add=weeklyProductCount',
         json: true
@@ -51,7 +51,7 @@ describe '.get()', ->
       expect(response.body[0].weeklyProductCount).to.equal 10
       expect(response.body[1].weeklyProductCount).to.equal 10
 
-    it 'ignores optional $get field if no $add query parameter', fibrous ->
+    it 'ignores optional get field if no $add query parameter', fibrous ->
       response = request.sync.get
         url: 'http://127.0.0.1:4000/resource',
         json: true
@@ -66,6 +66,25 @@ describe '.get()', ->
       expect(response.body.length).to.equal 2
       expect(response.body[0].productCount).to.be.undefined
       expect(response.body[1].productCount).to.be.undefined
+
+  describe 'filter: [Function]', ->
+    before fibrous ->
+      Model.sync.remove()
+      Model.sync.create
+        product: price: 10
+      Model.sync.create
+        product: price: 15
+      Model.sync.create
+        product: price: 20
+
+    it 'filters by the correct values', fibrous ->
+      response = request.sync.get
+        url: 'http://127.0.0.1:4000/resource_with_query_params?minPrice=12',
+        json: true
+
+      expect(response.body.length).to.equal 2
+      expect(response.body[0].product.price).to.equal 15
+      expect(response.body[1].product.price).to.equal 20
 
   describe 'search fields', ->
     describe 'single search field', ->
@@ -141,7 +160,7 @@ describe '.get()', ->
       it 'returns an empty array', ->
         expect(response.body.length).to.equal 0
 
-  describe 'dynamic $find field', ->
+  describe 'find: [Function]', ->
     {model} = {}
     before fibrous ->
       ParentModel.sync.remove()
@@ -163,7 +182,7 @@ describe '.get()', ->
       expect(response.body[0].name).to.equal 'foo'
       expect(response.body[1].name).to.equal 'bar'
 
-  describe 'dynamic $get field', ->
+  describe 'get: [Function]', ->
     {model} = {}
     before fibrous ->
       ParentModel.sync.remove()
@@ -189,7 +208,7 @@ describe '.get()', ->
       expect(response.body[1].parentName).to.equal 'banana'
       expect(response.body[2].parentName).to.equal 'orange'
 
-  describe 'second dynamic $get field', ->
+  describe 'second dynamic get field', ->
     {model} = {}
     before fibrous ->
       ParentModel.sync.remove()
@@ -295,7 +314,7 @@ describe '.get()', ->
       expect(response.body[0].day).to.equal '2014-10-05'
       expect(response.body[1].day).to.equal '2014-10-15'
 
-  describe '$validate', ->
+  describe 'validate', ->
     {model} = {}
     before fibrous ->
       ParentModel.sync.remove()
@@ -325,7 +344,7 @@ describe '.get()', ->
 
       expect(response.statusCode).to.equal 400
 
-  describe '$match', ->
+  describe 'match', ->
     {model} = {}
     before fibrous ->
       ParentModel.sync.remove()
@@ -354,7 +373,6 @@ describe '.get()', ->
         json: true
 
       expect(response.statusCode).to.equal 400
-
 
   describe 'options.defaultLimit', ->
     {model} = {}
@@ -394,7 +412,7 @@ describe '.get()', ->
       expect(response.statusCode).to.equal 200
       expect(response.body.length).to.equal 6
 
-  describe '$limit', ->
+  describe 'limit', ->
     before fibrous ->
       Model.sync.remove()
       targetId = new mongoose.Types.ObjectId()
@@ -409,7 +427,7 @@ describe '.get()', ->
     it 'limits the returned results', ->
       expect(response.body.length).to.equal 2
 
-  describe '$select', ->
+  describe 'select', ->
     describe 'single select', ->
       before fibrous ->
         Model.sync.remove()

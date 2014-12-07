@@ -30,6 +30,7 @@ schema = {
     find: fibrous (searchValue, {req, res}) ->
       parentModel = ParentModel.sync.findOne(name: searchValue)
       return {_id: $in: parentModel.modelIds}
+
     get: fibrous (resourcesToReturn, {req, res, models}) ->
       parentModelsByChildId = getParentModelsByChildId.sync(models)
       resourcesToReturn.forEach (resource) ->
@@ -42,7 +43,6 @@ schema = {
 }
 
 resource = new ResourceSchema Model, schema,
-
 
 getParentModelsByChildId = fibrous (models) ->
   modelIds = _(models).pluck('_id')

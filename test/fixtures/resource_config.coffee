@@ -10,6 +10,7 @@ schema =
   _id: '_id'
   name: 'name'
   day: 'day'
+  'product.price': 'product.price'
 
 schemaConfig =
   queryParams:
@@ -26,6 +27,7 @@ schemaConfig =
 
   defaultQuery:
     day: $gte: '2014-09-19'
+
   defaultLimit: 6
 
 resource = new ResourceSchema Model, schema, schemaConfig

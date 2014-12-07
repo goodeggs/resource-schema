@@ -19,10 +19,16 @@ RESERVED_KEYWORDS = [
 ###
 normalized schema:
 {
+ routeId: 12343
+}
+{
   normalField: {
     optional: true
     field: 'test.name'
   },
+  'routeId':
+    find: (1234)
+      { routeId: 1234 }
   dynamicField: {
     validate: (value) ->
     match: ->
@@ -31,6 +37,28 @@ normalized schema:
     set: (models, request, done) ->
   }
 }
+
+lastMinutePicks
+  find # querying
+
+  # get dynamic fields
+  get: (opsItems) ->
+    order
+    stops
+    route
+    opsItems.forEach (opsItem) ->
+      opsItem.routeId = route._id
+
+{
+  'routeId':
+    type:
+    validate:
+    find: (1234)
+      { routeId: 1234 }
+    filter:
+}
+
+/ops_items?user
 ###
 
 module.exports = class ResourceSchema
@@ -53,17 +81,10 @@ module.exports = class ResourceSchema
     context = {req, res, next}
     return if not @_isValid(req.query, context)
 
-    sendResources = (err, modelsFound) =>
-      resources = modelsFound.map (modelFound) =>
-        @_createResourceFromModel(modelFound, req.query.$select)
-
-      @_applyGetters(resources, modelsFound, context).then =>
-        res.body = resources
-        next()
-
     limit = @_getLimit req.query
     modelSelect = @_getModelSelectFields req.query
-    @_getMongoQuery(req.query, context).then (mongoQuery) =>
+    @_getMongoQuery(req.query, context)
+    .then (mongoQuery) =>
       # aggregate query
       if @options.groupBy
         modelQuery = @Model.aggregate()
@@ -77,7 +98,19 @@ module.exports = class ResourceSchema
         modelQuery.lean()
 
       modelQuery.limit(limit) if limit?
-      modelQuery.exec sendResources
+      modelQuery.exec (err, modelsFound) =>
+        if err then return next err
+
+
+        resources = modelsFound.map (modelFound) =>
+          @_createResourceFromModel(modelFound, req.query.$select)
+
+        @_applyGetters(resources, modelsFound, context)
+        .then =>
+          @_applyFilters(resources, modelsFound, context)
+        .then (resources) =>
+          res.body = resources
+          next()
 
   _getOne: (paramId) =>
     (req, res, next) =>
@@ -521,3 +554,9 @@ module.exports = class ResourceSchema
           obj[key][i] = convert(key, v)
       else
         obj[key] = convert(key, value)
+
+  _applyFilters: (resources, models, {req, res, next}) ->
+    for resourceField, config of @schema
+      if req.query?[resourceField]? and typeof config.filter is 'function'
+        resources = config.filter req.query[resourceField], resources, {req, res, next, models}
+    resources

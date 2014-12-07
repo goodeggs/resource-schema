@@ -14,5 +14,6 @@ app.use '/resource_aggregate', require './resource_aggregate'
 app.use '/resource_multiple_aggregate', require './resource_multiple_aggregate'
 app.use '/resource_config', require './resource_config'
 app.use '/resource_custom_key', require './resource_custom_key'
+app.use '/resource_with_query_params', require './resource_with_query_params'
 
 module.exports = app
