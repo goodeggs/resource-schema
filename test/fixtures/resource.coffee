@@ -10,9 +10,10 @@ schema = {
   '_id'
   'name':
     field: 'name'
-    set: fibrous (modelsToSave, {req, res, resources}) ->
+    set: (modelsToSave, {req, res, resources}, done) ->
       for model in modelsToSave
         model.name = model.name.toLowerCase()
+      done null, modelsToSave
   'active'
   'product.price'
   'productName': 'product.name'
@@ -23,35 +24,38 @@ schema = {
     field: 'productCount'
   'weeklyProductCount':
     optional: true
-    get: fibrous (resourcesToReturn, {req, res, models}) ->
+    get: (resourcesToReturn, {req, res, next, models}, done) ->
       resourcesToReturn.forEach (resource) ->
         resource.weeklyProductCount = 10
+      done null, resourcesToReturn
   'parentName':
-    find: fibrous (searchValue, {req, res}) ->
-      parentModel = ParentModel.sync.findOne(name: searchValue)
-      return {_id: $in: parentModel.modelIds}
+    find: (searchValue, {req, res, next}, done) ->
+      ParentModel.findOne {name: searchValue}, (err, parentModel) ->
+        done null, { _id: $in: parentModel.modelIds }
 
-    get: fibrous (resourcesToReturn, {req, res, models}) ->
-      parentModelsByChildId = getParentModelsByChildId.sync(models)
-      resourcesToReturn.forEach (resource) ->
-        resource.parentName = parentModelsByChildId[resource._id]?.name
+    get: (resourcesToReturn, {req, res, models}, done) ->
+      getParentModelsByChildId models, (err, parentModelsByChildId) ->
+        resourcesToReturn.forEach (resource) ->
+          resource.parentName = parentModelsByChildId[resource._id]?.name
+        done null, resourcesToReturn
 
   'secondGet':
-    get: fibrous (resourcesToReturn, {req, res, models}) ->
+    get: (resourcesToReturn, {req, res, models}, done) ->
       resourcesToReturn.forEach (foundResource) ->
         foundResource.secondGet = 'test'
+      done null, resourcesToReturn
 }
 
 resource = new ResourceSchema Model, schema,
 
-getParentModelsByChildId = fibrous (models) ->
+getParentModelsByChildId = (models, done) ->
   modelIds = _(models).pluck('_id')
-  parentModels = ParentModel.sync.find(modelIds: $in: modelIds)
-  parentModelsByChildId = {}
-  for parentModel in parentModels
-    for modelId in parentModel.modelIds
-      parentModelsByChildId[modelId.toString()] = parentModel
-  parentModelsByChildId
+  parentModels = ParentModel.find {modelIds: $in: modelIds}, (err, parentModels) ->
+    parentModelsByChildId = {}
+    for parentModel in parentModels
+      for modelId in parentModel.modelIds
+        parentModelsByChildId[modelId.toString()] = parentModel
+    done null, parentModelsByChildId
 
 module.exports = app = express()
 

@@ -14,9 +14,9 @@ schema =
   total:
     get: $sum: 1
   parentName:
-    find: fibrous (searchValue) ->
-      parentModel = ParentModel.sync.findOne(name: searchValue)
-      return {_id: $in: parentModel.modelIds}
+    find: (searchValue, {}, done) ->
+      ParentModel.findOne {name: searchValue}, (err, parentModel) ->
+        done null, {_id: $in: parentModel.modelIds}
 
 resource = new ResourceSchema Model, schema, schemaOptions
 

@@ -18,12 +18,12 @@ schemaConfig =
       type: String
       validate: (value) ->
         /[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/.test(value)
-      find: fibrous (value) -> { 'day': $gte: value }
+      find: (value, {}, done) -> done null, { 'day': $gte: value }
     'containsDays':
       type: String
       isArray: true
       match: /[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/
-      find: fibrous (days) -> { 'day': $in: days }
+      find: (days, {}, done) -> done null, { 'day': $in: days }
 
   defaultQuery:
     day: $gte: '2014-09-19'
