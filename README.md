@@ -133,60 +133,40 @@ schema = {
 # }
 ```
 
-### get: (resources, context) ->
+### get: (resource, context) ->
 
 Dynamically get the value whenever a resource is requested. Note, you need to explicitly set the value on each resource
 
 ``` coffeescript
-schema = {
-  'totalProductsSold': {
-    get: (resourcesToReturn, {models, req, res, next}) ->
-      resourcesToReturn.forEach (resource) ->
-        resource.fullName = resource.firtName + ' ' + resource.lastName
-  }
-}
+schema =
+  'fullName':
+    get: (resource, {req, res, next}) ->
+      resource.firtName + ' ' + resource.lastName
 ```
 
-### getAsync: (resources, context) ->
-
-Async version of get
-
-``` coffeescript
-schema = {
-  'totalProductsSold': {
-    getAsync: (resourcesToReturn, {models, req, res, next}, done) ->
-      totalProductsSoldById = getTotalProductsSoldById (err, totalProductsSoldById) ->
-        resourcesToReturn.forEach (resource) ->
-          resource.totalProductsSold = totalProductsSoldById[resource._id]
-        done()
-  }
-}
-```
-
-### set: [Function]
+### set: (model, context) ->
 
 Dynamically set the value whenever a resource is saved or updated
 
 ``` coffeescript
 schema = {
   'name': {
-    set: (modelsToSave, {resources, req, res, next}, done) ->
-      modelsToSave.forEach (model) ->
-        model.name = model.name.toLowerCase()
-      done null, modelsToSave
+    set: (model, {req, res, next}) ->
+      model.name.toLowerCase()
   }
 }
 ```
 
-### find: [Function]
+### find: (queryValue, context) ->
 
 Dynamically find resources with the provided query value. Return an object that will extend the mongoose query. $find is used to define query parameters.
 
 ``` coffeescript
 schema = {
-  'soldOn':
-    $find: (days, {req, res, next}, done) ->
-      done null { 'day': $in: days }
+  'soldOn': {
+    find: (days, {req, res, next}) ->
+      { 'day': $in: days }
+  }
 }
 ```
 
@@ -195,25 +175,25 @@ schema = {
 If true, do not include the value in the resource unless specifically requested by the client with the '$add' query parameter
 
 ``` coffeescript
-// GET /api/products?$add=name
+# GET /api/products?$add=name
 
 schema = {
   'name': {
-    $optional: true
-    $field: 'name'
+    optional: true
+    field: 'name'
   }
 }
 
 ```
 
-### validate: [Function]
+### validate: (value) ->
 
 Return a 400 invalid request if the provided value does not pass the validation test.
 
 ``` coffeescript
 schema = {
   'date': {
-    $validate: (value) ->
+    validate: (value) ->
       /[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/.test(value)
   }
 }
@@ -226,7 +206,7 @@ Return a 400 invalid request if the provided value does match the given regular 
 ``` coffeescript
 schema = {
   'date': {
-    $match:/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/
+    match: /[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/
   }
 }
 ```
@@ -246,7 +226,7 @@ Valid types include
 ``` coffeescript
 schema = {
   'active': {
-    $type: Boolean
+    type: Boolean
   }
 }
 ```
@@ -299,13 +279,13 @@ Define query parameters for this resource using the $find method. Note that thes
 ```coffeescript
 queryParams =
   'soldOn':
-    $type: String
-    $isArray: true
-    $match: /[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/
-    $find: (days) -> { 'day': $in: days }
+    type: String
+    isArray: true
+    match: /[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/
+    find: (days) -> { 'day': $in: days }
   'fromLastWeek':
-    $type: Boolean
-    $find: (days) -> { 'day': $gt: '2014-10-12' }
+    type: Boolean
+    find: (days) -> { 'day': $gt: '2014-10-12' }
 ```
 
 ## Querying the resources
@@ -368,7 +348,7 @@ You can even add optional attributes:
 ``` coffee
 'user'
 'user.note':
-  $optional: true
+  optional: true
 ```
 
 ## Contributing
