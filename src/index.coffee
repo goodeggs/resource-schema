@@ -83,7 +83,7 @@ module.exports = class ResourceSchema
         models = resources.map (resource) =>
           @_convertTypes(resource, context)
           @_createModelFromResource(resource)
-        @_buildContext(context, resources, models)
+        @_applyResolvers(context, resources, models)
         .then =>
           @_applySetters(resources, models, context)
           @Model.create models, (err, modelsSaved...) =>
@@ -98,7 +98,7 @@ module.exports = class ResourceSchema
         # TODO: is this necessary here? Mongoose will catch type problems...
         @_convertTypes(resource, context)
         newModelData = @_createModelFromResource resource
-        @_buildContext(context, [resource], [newModelData])
+        @_applyResolvers(context, [resource], [newModelData])
         .then =>
           @_applySetters([resource], [newModelData], context)
           model = new @Model(newModelData)
@@ -123,7 +123,7 @@ module.exports = class ResourceSchema
         idValue = req.params[paramId]
         query = {}
         query[paramId] = idValue
-        @_buildContext(context, [resource], [newModelData])
+        @_applyResolvers(context, [resource], [newModelData])
         .then =>
           @_applySetters([resource], [newModelData], context)
           @Model.findOneAndUpdate(query, newModelData, {upsert: true}).lean().exec (err, model) =>
@@ -145,7 +145,7 @@ module.exports = class ResourceSchema
           @_convertTypes(resource, context)
           @_createModelFromResource(resource)
 
-        @_buildContext(context, resources, models)
+        @_applyResolvers(context, resources, models)
         .then =>
           @_applySetters(resources, models, context)
           savePromises = []
@@ -559,35 +559,37 @@ module.exports = class ResourceSchema
     resources
 
   ###
-  Build the context object that will be passed into get and set methods
+  Execute all resolves that are needed for getting and setting properties,
+  and add those resolved values to the context.
   ###
-  _buildContext: (context, resources, models) ->
+  _applyResolvers: (context, resources, models) ->
     {req, res, next} = context
 
-    contextPromises = []
+    resolvePromises = []
     context.resources = resources
     context.models = models
     selectedResourceFields = @_getResourceFields(req.query)
 
     for resourceField, config of @schema
-      continue if (resourceField not in selectedResourceFields) or (typeof config.context isnt 'object')
+      continue if resourceField not in selectedResourceFields
+      continue if typeof config.resolve isnt 'object'
 
-      for contextVar, contextMethod of config.context
-        continue if context[contextVar]
+      for resolveVar, resolveMethod of config.resolve
+        continue if context[resolveVar]
         do =>
           d = q.defer()
-          contextMethod context, (err, result) ->
-            context[contextVar] = result
+          resolveMethod context, (err, result) ->
+            context[resolveVar] = result
             d.resolve()
 
-          contextPromises.push d.promise
+          resolvePromises.push d.promise
 
-    q.all(contextPromises)
+    q.all(resolvePromises)
 
   _sendResource: (model, context) ->
     {req, res, next} = context
     resource = @_createResourceFromModel(model, req.query.$select)
-    @_buildContext(context, [resource], [model])
+    @_applyResolvers(context, [resource], [model])
     .then =>
       @_applyGetters([resource], context)
       res.body = resource
@@ -596,7 +598,7 @@ module.exports = class ResourceSchema
   _sendResources: (models, context) ->
     {req, res, next} = context
     resources = models.map (model) => @_createResourceFromModel(model, req.query.$select)
-    @_buildContext(context, resources, models)
+    @_applyResolvers(context, resources, models)
     .then =>
       @_applyGetters(resources, context)
       @_applyFilters(resources, context)

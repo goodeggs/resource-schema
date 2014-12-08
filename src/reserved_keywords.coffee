@@ -11,7 +11,7 @@ module.exports = [
   'filter'
 
   'field'
-  'context'
+  'resolve'
   'optional'
   'validate'
   'match'

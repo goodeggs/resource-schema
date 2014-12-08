@@ -31,9 +31,8 @@ schema = {
 
   # Dynamically get totalQuantitySold whenever the resource is requested:
   'totalQuantitySold':
-    context:
-      totalQuantitySoldByProductId: (resources, {}, done) ->
-        getTotalQuantitySoldById(resources, done)
+    resolve:
+      totalQuantitySoldByProductId: getTotalQuantitySoldById
     get: (product, {totalQuantitySoldByProductId}) ->
       totalQuantitySoldByProductId[product._id]
 }

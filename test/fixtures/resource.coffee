@@ -34,7 +34,7 @@ schema = {
     findAsync: (searchValue, {req, res, next}, done) ->
       ParentModel.findOne {name: searchValue}, (err, parentModel) ->
         done null, { _id: $in: parentModel.modelIds }
-    context:
+    resolve:
       parentModelsByChildId: ({models}, done) -> getParentModelsByChildId(models, done)
     get: (resource, {parentModelsByChildId}) ->
       parentModelsByChildId[resource._id]?.name
