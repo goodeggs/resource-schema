@@ -14,7 +14,7 @@ schema =
   total:
     get: $sum: 1
   parentName:
-    find: (searchValue, {}, done) ->
+    findAsync: (searchValue, {}, done) ->
       ParentModel.findOne {name: searchValue}, (err, parentModel) ->
         done null, {_id: $in: parentModel.modelIds}
 

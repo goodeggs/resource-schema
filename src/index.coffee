@@ -4,62 +4,7 @@ q = require 'q'
 clone = require 'clone'
 deepExtend = require './deep_extend'
 
-RESERVED_KEYWORDS = [
-  'find'
-  'get'
-  'set'
-  'field'
-  'optional'
-  'validate'
-  'match'
-  'type'
-  'isArray'
-]
-
-###
-normalized schema:
-{
- routeId: 12343
-}
-{
-  normalField: {
-    optional: true
-    field: 'test.name'
-  },
-  'routeId':
-    find: (1234)
-      { routeId: 1234 }
-  dynamicField: {
-    validate: (value) ->
-    match: ->
-    find: (value, done) ->
-    get: (resources, request, done) ->
-    set: (models, request, done) ->
-  }
-}
-
-lastMinutePicks
-  find # querying
-
-  # get dynamic fields
-  get: (opsItems) ->
-    order
-    stops
-    route
-    opsItems.forEach (opsItem) ->
-      opsItem.routeId = route._id
-
-{
-  'routeId':
-    type:
-    validate:
-    find: (1234)
-      { routeId: 1234 }
-    filter:
-}
-
-/ops_items?user
-###
+RESERVED_KEYWORDS = require './reserved_keywords'
 
 module.exports = class ResourceSchema
   constructor: (@Model, schema, @options = {}) ->
@@ -85,29 +30,29 @@ module.exports = class ResourceSchema
     modelSelect = @_getModelSelectFields req.query
     @_getMongoQuery(req.query, context)
     .then (mongoQuery) =>
-      # aggregate query
-      if @options.groupBy
-        modelQuery = @Model.aggregate()
-        modelQuery.match(mongoQuery)
-        modelQuery.group(@_getGroupQuery())
-
-      # non aggregate query
+      # normal (non aggregate) resource
       if not @options.groupBy
         modelQuery = @Model.find(mongoQuery)
         modelQuery.select(modelSelect)
         modelQuery.lean()
 
+      # aggregate resource
+      if @options.groupBy
+        modelQuery = @Model.aggregate()
+        modelQuery.match(mongoQuery)
+        modelQuery.group(@_getGroupQuery())
+
       modelQuery.limit(limit) if limit?
       modelQuery.exec (err, modelsFound) =>
         if err then return next err
-
+        context.models = modelsFound
 
         resources = modelsFound.map (modelFound) =>
           @_createResourceFromModel(modelFound, req.query.$select)
 
-        @_applyGetters(resources, modelsFound, context)
+        @_applyGetters(resources, context)
         .then =>
-          @_applyFilters(resources, modelsFound, context)
+          @_applyFilters(resources, context)
         .then (resources) =>
           res.body = resources
           next()
@@ -130,7 +75,8 @@ module.exports = class ResourceSchema
         return res.status(400).send(err) if err
         return res.status(404).send("No #{paramId} found with id #{idValue}") if not modelFound?
         resource = @_createResourceFromModel(modelFound, req.query.$select)
-        @_applyGetters([resource], [modelFound], context).then =>
+        context.models = [modelFound]
+        @_applyGetters([resource], context).then =>
           res.body = resource
           next()
 
@@ -208,27 +154,34 @@ module.exports = class ResourceSchema
     res.send res.body
 
   ###
-  Wait for all find, and queryParams to resolve, and build the model query with the results
+  Build the model query from the query parameters
   ###
   _getMongoQuery: (requestQuery, {req, res, next}) =>
     modelQuery = clone(@options.defaultQuery) or {}
     deferred = q.defer()
     queryPromises = []
-    resourceSearchFields = @_selectValidResourceSearchFields requestQuery
-    @_convertTypes(resourceSearchFields, {req, res, next})
+    resourceQuery = @_getResourceQuery requestQuery, {req, res, next}
 
-    if resourceSearchFields
-      for resourceField, value of resourceSearchFields
-        if @schema[resourceField].find
-          do =>
-            d = q.defer()
-            @schema[resourceField].find value, {req, res, next}, (err, query) =>
-              return res.status(400).send (err.toString()) if err
-              deepExtend(modelQuery, query)
-              d.resolve()
-            queryPromises.push(d.promise)
-        else if @schema[resourceField].field
-          modelQuery[@schema[resourceField].field] = value
+    for resourceField, value of resourceQuery
+      # apply sync finders
+      if typeof @schema[resourceField].find is 'function'
+        query = @schema[resourceField].find value, {req, res, next}
+        deepExtend(modelQuery, query)
+
+      # apply async finders
+      else if typeof @schema[resourceField].findAsync is 'function'
+        do =>
+          d = q.defer()
+          @schema[resourceField].findAsync value, {req, res, next}, (err, query) =>
+            return res.status(400).send (err.toString()) if err
+            deepExtend(modelQuery, query)
+            d.resolve()
+          queryPromises.push(d.promise)
+
+      # apply model queries
+      else if @schema[resourceField].field
+        modelQuery[@schema[resourceField].field] = value
+
 
     q.all(queryPromises).then ->
       deferred.resolve(modelQuery)
@@ -243,11 +196,12 @@ module.exports = class ResourceSchema
         dot.set(model, config.field, value) if value isnt undefined
     model
 
-  _createResourceFromModel: (model, resourceSelectFields) =>
+  _createResourceFromModel: (model, resourceFields) =>
     resource = {}
 
-    resourceSelectFields = resourceSelectFields.split(' ') if typeof resourceSelectFields is 'string'
-    #set _id
+    resourceFields = resourceFields.split(' ') if typeof resourceFields is 'string'
+
+    #set _id for aggregate resources
     if @options.groupBy?.length
       delete model._id
       aggregateValues = @options.groupBy.map (aggregateField) ->
@@ -257,11 +211,10 @@ module.exports = class ResourceSchema
     #set all other fields
     for resourceField, config of @schema
       # TODO set default select to all fields?
-      if fieldIsSelectable = !resourceSelectFields? or resourceField in resourceSelectFields
+      if fieldIsSelectable = !resourceFields? or resourceField in resourceFields
         if config.field
           value = dot.get model, config.field
           dot.set(resource, resourceField, value)
-        # TODO: helper for this
         if config.get and typeof config.get is 'object'
           value = model[resourceField]
           dot.set(resource, resourceField, value)
@@ -273,30 +226,45 @@ module.exports = class ResourceSchema
   _applySetters: (resources, models, {req, res, next}) =>
     setPromises = []
     for resourceField, config of @schema
-      if config.set
+
+      # apply sync setters
+      if typeof config.set is 'function'
+        config.set models, {req, res, next, resources}
+
+      # apply async setters
+      if typeof config.setAsync is 'function'
         do =>
           d = q.defer()
-          config.set models, {req, res, next, resources}, (err, results) ->
+          config.setAsync models, {req, res, next, resources}, (err, results) ->
             return res.status(400).send err.toString() if err
             d.resolve()
           setPromises.push d.promise
+
     return q.all setPromises
 
   ###
   Wait for all get queries to update resources
   ###
-  _applyGetters: (resources, models, {req, res, next}) =>
+  _applyGetters: (resources, {req, res, next, models}) =>
     getPromises = []
-    resourceSelectFields = @_getResourceSelectFields(req.query)
+    resourceFields = @_getResourceFields(req.query)
     for resourceField, config of @schema
-      if config.get and typeof config.get is 'function' and resourceField in resourceSelectFields
+      continue if resourceField not in resourceFields
+
+      # apply sync getters
+      if typeof config.get is 'function'
+        config.get resources, {req, res, next, models}
+
+      # apply async getters
+      if typeof config.getAsync is 'function'
         # need to wrap in closure, otherwise we overwrite original promise references
         do =>
           d = q.defer()
-          config.get resources, {req, res, next, models}, (err, results) ->
+          config.getAsync resources, {req, res, next, models}, (err, results) ->
             return res.status(400).send err.toString() if err
             d.resolve()
           getPromises.push d.promise
+
     return q.all getPromises
 
   ###
@@ -326,21 +294,21 @@ module.exports = class ResourceSchema
     query.$limit or @options.defaultLimit
 
   ###
-  Get value to use for limiting query results
+  Get resource fields that will be returned with this request
   @param [Object] query - query params from client
   ###
-  _getResourceSelectFields: (query) =>
+  _getResourceFields: (query) =>
     [resourceFields] = @_getResourceAndModelFields()
     select = query.$select
 
-    resourceSelectFields =
+    resourceFields =
       if select
         select = select.split(' ') if typeof select is 'string'
         _(select).intersection resourceFields
       else
         _(resourceFields).reject (resourceField) => @schema[resourceField].optional
 
-    _.union(resourceSelectFields, @_getAddFields(query))
+    _.union(resourceFields, @_getAddFields(query))
 
   ###
   Get all valid $add fields from the query. The add fields are used to
@@ -373,8 +341,8 @@ module.exports = class ResourceSchema
     modelSelectFields =
       if select
         select = select.split(' ') if typeof select is 'string'
-        resourceSelectFields = _(select).intersection resourceFields
-        resourceSelectFields.map (resourceSelectField) => @schema[resourceSelectField].field
+        resourceFields = _(select).intersection resourceFields
+        resourceFields.map (resourceSelectField) => @schema[resourceSelectField].field
       else
         resourceFields.map (resourceField) =>
           if @schema[resourceField].field and (not @schema[resourceField].optional or resourceField in addFields)
@@ -383,18 +351,27 @@ module.exports = class ResourceSchema
     _(modelSelectFields).compact().join(' ')
 
   ###
-  Select valid properties from query that can be used for filtering resources in the schema
+  Remove all invalid query parameters (not in schema) and reserved query
+  parameters (like $limit and $add).
   @param [Object] query - query params from client
-  @returns [Object] valid resource search fields and their values
+  @returns [Object] valid query params and values
+  @example
+    GET /products?$limit=10&name=apple&loaded[at]=2014-10-01
+    => {
+      'name': 'apple'
+      'loaded.at': '2014-10-01'
+    }
   ###
-  _selectValidResourceSearchFields: (query) =>
-    queryDotString = @_convertKeysToDotStrings query
+  _getResourceQuery: (query, {req, res, next}) =>
+    query = @_convertKeysToDotStrings query
     [resourceFields, modelFields] = @_getResourceAndModelFields()
     validFields = {}
-    for field, value of queryDotString
+    for field, value of query
       if field in resourceFields
         dot.set validFields, field, value
-    @_convertKeysToDotStrings validFields
+    queryFields = @_convertKeysToDotStrings validFields
+    @_convertTypes(queryFields, {req, res, next})
+    queryFields or {}
 
   ###
   Collapse all nested fields to dot format. Ignore Reserved Keywords.
@@ -424,6 +401,10 @@ module.exports = class ResourceSchema
     modelFields = resourceFields.map (resourceField) => @schema[resourceField].field
     [_.compact(resourceFields), _.compact(modelFields)]
 
+  ###
+  If no schema provided, generate a schema that directly mirrors the mongoose model fields
+  @param [Object] Model - Model to generate schema from
+  ###
   _generateSchemaFromModel: (Model) =>
     # Paths already in dot notation
     schemaKeys = Object.keys Model.schema.paths
@@ -555,8 +536,9 @@ module.exports = class ResourceSchema
       else
         obj[key] = convert(key, value)
 
-  _applyFilters: (resources, models, {req, res, next}) ->
-    for resourceField, config of @schema
-      if req.query?[resourceField]? and typeof config.filter is 'function'
-        resources = config.filter req.query[resourceField], resources, {req, res, next, models}
+  _applyFilters: (resources, {req, res, next, models}) ->
+    resourceQuery = @_getResourceQuery req.query, {req, res, next}
+    for resourceField, value of resourceQuery
+      if typeof @schema[resourceField].filter is 'function'
+        resources = @schema[resourceField].filter value, resources, {req, res, next, models}
     resources

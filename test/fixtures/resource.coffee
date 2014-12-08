@@ -10,10 +10,10 @@ schema = {
   '_id'
   'name':
     field: 'name'
-    set: (modelsToSave, {req, res, resources}, done) ->
+    set: (modelsToSave, {req, res, resources}) ->
       for model in modelsToSave
         model.name = model.name.toLowerCase()
-      done null, modelsToSave
+      modelsToSave
   'active'
   'product.price'
   'productName': 'product.name'
@@ -24,26 +24,25 @@ schema = {
     field: 'productCount'
   'weeklyProductCount':
     optional: true
-    get: (resourcesToReturn, {req, res, next, models}, done) ->
+    get: (resourcesToReturn, {req, res, next, models}) ->
       resourcesToReturn.forEach (resource) ->
         resource.weeklyProductCount = 10
-      done null, resourcesToReturn
+      resourcesToReturn
   'parentName':
-    find: (searchValue, {req, res, next}, done) ->
+    findAsync: (searchValue, {req, res, next}, done) ->
       ParentModel.findOne {name: searchValue}, (err, parentModel) ->
         done null, { _id: $in: parentModel.modelIds }
 
-    get: (resourcesToReturn, {req, res, models}, done) ->
+    getAsync: (resourcesToReturn, {req, res, models}, done) ->
       getParentModelsByChildId models, (err, parentModelsByChildId) ->
         resourcesToReturn.forEach (resource) ->
           resource.parentName = parentModelsByChildId[resource._id]?.name
         done null, resourcesToReturn
 
   'secondGet':
-    get: (resourcesToReturn, {req, res, models}, done) ->
-      resourcesToReturn.forEach (foundResource) ->
-        foundResource.secondGet = 'test'
-      done null, resourcesToReturn
+    get: (resourcesToReturn, {req, res, models}) ->
+      resourcesToReturn.forEach (foundResource) -> foundResource.secondGet = 'test'
+      resourcesToReturn
 }
 
 resource = new ResourceSchema Model, schema,

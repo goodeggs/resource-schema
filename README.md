@@ -5,9 +5,13 @@
 
 Define schemas for RESTful resources from mongoose models, and generate express middleware to GET, POST, PUT, and DELETE to those resources.
 
+## Table of Contents
+
+[Why ResourceSchema]()
+
 ## Why ResourceSchema?
 
-ResourceSchema allows you to define complex RESTful resources in a simple and declarative way. For example:
+ResourceSchema allows you to define complex RESTful resources in a simple and declarative way.
 
 ## Example
 
@@ -37,15 +41,13 @@ queryParams =
     type: String
     isArray: true
     match: /[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/
-    find: (days, done) ->
-      done null, { 'day': $in: days }
+    find: (days) -> { 'day': $in: days }
 
   # query for products sold in the last week
   # e.g. api/products?fromLastWeek=true
   'fromLastWeek':
     type: Boolean
-    find: (days, done) ->
-      done null, { 'day': $gt: '2014-10-12' }
+    find: (days) -> { 'day': $gt: '2014-10-12' }
 
 resource = ResourceSchema(Product, schema, {queryParams})
 
@@ -128,17 +130,32 @@ schema = {
 # }
 ```
 
-### get: [Function]
+### get: (resources, context) ->
 
-Dynamically get the value whenever a resource is retrieved.
+Dynamically get the value whenever a resource is requested. Note, you need to explicitly set the value on each resource
 
 ``` coffeescript
 schema = {
   'totalProductsSold': {
-    get: (resourcesToReturn, {models, req, res, next}, done) ->
+    get: (resourcesToReturn, {models, req, res, next}) ->
       resourcesToReturn.forEach (resource) ->
-        resource.totalProductsSold = 10
-      done null, resourcesToReturn
+        resource.fullName = resource.firtName + ' ' + resource.lastName
+  }
+}
+```
+
+### getAsync: (resources, context) ->
+
+Async version of get
+
+``` coffeescript
+schema = {
+  'totalProductsSold': {
+    getAsync: (resourcesToReturn, {models, req, res, next}, done) ->
+      totalProductsSoldById = getTotalProductsSoldById (err, totalProductsSoldById) ->
+        resourcesToReturn.forEach (resource) ->
+          resource.totalProductsSold = totalProductsSoldById[resource._id]
+        done()
   }
 }
 ```
@@ -282,10 +299,10 @@ queryParams =
     $type: String
     $isArray: true
     $match: /[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/
-    $find: fibrous (days) -> { 'day': $in: days }
+    $find: (days) -> { 'day': $in: days }
   'fromLastWeek':
     $type: Boolean
-    $find: fibrous (days) -> { 'day': $gt: '2014-10-12' }
+    $find: (days) -> { 'day': $gt: '2014-10-12' }
 ```
 
 ## Querying the resources
