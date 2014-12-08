@@ -18,9 +18,9 @@ module.exports = class ResourceSchema
   ###
   get: (paramId) ->
     if (paramId)
-      return @_getOne(paramId)
+      @_getOne(paramId)
     else
-      return @_getAll
+      @_getAll
 
   _getAll: (req, res, next) =>
     context = {req, res, next}
@@ -43,15 +43,12 @@ module.exports = class ResourceSchema
         modelQuery.group(@_getGroupQuery())
 
       modelQuery.limit(limit) if limit?
-      modelQuery.exec (err, modelsFound) =>
+      modelQuery.exec (err, models) =>
         if err then return next err
-        context.models = modelsFound
-
-        resources = modelsFound.map (modelFound) =>
-          @_createResourceFromModel(modelFound, req.query.$select)
-
-        @_applyGetters(resources, context)
+        resources = models.map (model) => @_createResourceFromModel(model, req.query.$select)
+        @_buildContext(context, resources, models)
         .then =>
+          @_applyGetters(resources, context)
           @_applyFilters(resources, context)
         .then (resources) =>
           res.body = resources
@@ -71,12 +68,13 @@ module.exports = class ResourceSchema
       modelQuery = @Model.findOne(query)
       modelQuery.select(select) if select?
       modelQuery.lean()
-      modelQuery.exec (err, modelFound) =>
+      modelQuery.exec (err, model) =>
         return res.status(400).send(err) if err
-        return res.status(404).send("No #{paramId} found with id #{idValue}") if not modelFound?
-        resource = @_createResourceFromModel(modelFound, req.query.$select)
-        context.models = [modelFound]
-        @_applyGetters([resource], context).then =>
+        return res.status(404).send("No #{paramId} found with id #{idValue}") if not model?
+        resource = @_createResourceFromModel(model, req.query.$select)
+        @_buildContext(context, [resource], [model])
+        .then =>
+          @_applyGetters([resource], context)
           res.body = resource
           next()
 
@@ -91,7 +89,9 @@ module.exports = class ResourceSchema
       return if not @_isValid(resource, context)
       @_convertTypes(resource, {req, res, next})
       newModelData = @_createModelFromResource resource
-      @_applySetters([resource], [newModelData], context).then =>
+      @_buildContext(context, [resource], [newModelData])
+      .then =>
+        @_applySetters([resource], [newModelData], context)
         model = new @Model(newModelData)
         model.save (err, modelSaved) =>
           return res.status(400).send(err) if err
@@ -108,16 +108,15 @@ module.exports = class ResourceSchema
       context = {req, res, next}
       return if not @_isValid(req.query, context)
       return if not @_isValid(req.body, context)
-      newModelData = @_createModelFromResource req.body
+      resource = req.body
+      newModelData = @_createModelFromResource resource
 
       idValue = req.params[paramId]
       query = {}
       query[paramId] = idValue
-
-      # if using mongoose timestamps plugin:
-      # since we are not updating an instance of mongoose, we need to manually add the updatedAt timestamp
-      # newModelData.updatedAt = new Date() if newModelData.updatedAt
-      @_applySetters([req.body], [newModelData], context).then =>
+      @_buildContext(context, [resource], [newModelData])
+      .then =>
+        @_applySetters([resource], [newModelData], context)
         @Model.findOneAndUpdate(query, newModelData, {upsert: true}).lean().exec (err, modelUpdated) =>
           return res.send 400, err if err
           return res.send 404, 'resource not found' if !modelUpdated
@@ -223,49 +222,24 @@ module.exports = class ResourceSchema
   ###
   Wait for all set queries to update models
   ###
-  _applySetters: (resources, models, {req, res, next}) =>
-    setPromises = []
+  _applySetters: (resources, models, context) =>
+    {req, res, next} = context
     for resourceField, config of @schema
-
-      # apply sync setters
-      if typeof config.set is 'function'
-        config.set models, {req, res, next, resources}
-
-      # apply async setters
-      if typeof config.setAsync is 'function'
-        do =>
-          d = q.defer()
-          config.setAsync models, {req, res, next, resources}, (err, results) ->
-            return res.status(400).send err.toString() if err
-            d.resolve()
-          setPromises.push d.promise
-
-    return q.all setPromises
+      continue if typeof config.set isnt 'function'
+      models.forEach (model) =>
+        model[@schema[resourceField].field] = config.set(model, context)
 
   ###
   Wait for all get queries to update resources
   ###
-  _applyGetters: (resources, {req, res, next, models}) =>
-    getPromises = []
+  _applyGetters: (resources, context) =>
+    {req, res, next, models} = context
     resourceFields = @_getResourceFields(req.query)
     for resourceField, config of @schema
       continue if resourceField not in resourceFields
-
-      # apply sync getters
-      if typeof config.get is 'function'
-        config.get resources, {req, res, next, models}
-
-      # apply async getters
-      if typeof config.getAsync is 'function'
-        # need to wrap in closure, otherwise we overwrite original promise references
-        do =>
-          d = q.defer()
-          config.getAsync resources, {req, res, next, models}, (err, results) ->
-            return res.status(400).send err.toString() if err
-            d.resolve()
-          getPromises.push d.promise
-
-    return q.all getPromises
+      continue if typeof config.get isnt 'function'
+      resources.forEach (resource) ->
+        resource[resourceField] = config.get(resource, context)
 
   ###
   Get $group config used for aggregating the model
@@ -294,8 +268,11 @@ module.exports = class ResourceSchema
     query.$limit or @options.defaultLimit
 
   ###
-  Get resource fields that will be returned with this request
+  Get resource fields that will be returned with this request. Reject everything
+  that is added or not selected in the query parameters.
+
   @param [Object] query - query params from client
+  @return [Array] resource fields
   ###
   _getResourceFields: (query) =>
     [resourceFields] = @_getResourceAndModelFields()
@@ -494,7 +471,6 @@ module.exports = class ResourceSchema
   - Number
   - Boolean
   - mongoose.Types.ObjectId and other newable objects
-  TODO: needs to be tested
   ###
   _convertTypes: (obj, {req, res, next}) ->
     send400 = (type, key, value) =>
@@ -536,9 +512,38 @@ module.exports = class ResourceSchema
       else
         obj[key] = convert(key, value)
 
+  ###
+  Filter down resources with all filter queryParams
+  ###
   _applyFilters: (resources, {req, res, next, models}) ->
     resourceQuery = @_getResourceQuery req.query, {req, res, next}
     for resourceField, value of resourceQuery
       if typeof @schema[resourceField].filter is 'function'
         resources = @schema[resourceField].filter value, resources, {req, res, next, models}
     resources
+
+  ###
+  Build the context object that will be passed into get and set methods
+  ###
+  _buildContext: (context, resources, models) ->
+    {req, res, next} = context
+
+    contextPromises = []
+    context.resources = resources
+    context.models = models
+    selectedResourceFields = @_getResourceFields(req.query)
+
+    for resourceField, config of @schema
+      continue if (resourceField not in selectedResourceFields) or (typeof config.context isnt 'object')
+
+      for contextVar, contextMethod of config.context
+        continue if context[contextVar]
+        do =>
+          d = q.defer()
+          contextMethod context, (err, result) ->
+            context[contextVar] = result
+            d.resolve()
+
+          contextPromises.push d.promise
+
+    q.all(contextPromises)
