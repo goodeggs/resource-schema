@@ -9,33 +9,52 @@ Define schemas for RESTful resources from mongoose models, and generate express 
 
 ResourceSchema allows you to define complex RESTful resources in a simple and declarative way. For example:
 
+## Example
+
 ```coffeescript
 schema = {
-  '_id'
-  'name'
+  # Return these model values when requesting the resource:
+  '_id': '_id'
+  'name': 'name'
+  'day': 'day'
+
+  # Model field 'active' renamed as isActive
   'isActive': 'active'
+
+  # Dynamically get totalQuantitySold whenever the resource is requested:
   'totalQuantitySold':
-    $optional: true
-    $get: addTotalQuantitySold # method defined elsewhere
+    optional: true
+    get: (resourcesToReturn, done) ->
+      getTotalQuantitySoldById (err, totalQuantitySoldByResourceId) ->
+        resourcesToReturn.forEach (resource) ->
+          resource.totalQuantitySold = totalQuantitySoldByResourceId[resource]
 }
 
 queryParams =
+  # query for products sold on the specified days
+  # e.g. api/products?soldOn=2014-10-01&soldOn=2014-10-05
   'soldOn':
-    $type: String
-    $isArray: true
-    $match: /[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/
-    $find: fibrous (days) -> { 'day': $in: days }
+    type: String
+    isArray: true
+    match: /[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/
+    find: (days, done) ->
+      done null, { 'day': $in: days }
+
+  # query for products sold in the last week
+  # e.g. api/products?fromLastWeek=true
   'fromLastWeek':
-    $type: Boolean
-    $find: fibrous (days) -> { 'day': $gt: '2014-10-12' }
+    type: Boolean
+    find: (days, done) ->
+      done null, { 'day': $gt: '2014-10-12' }
 
 resource = ResourceSchema(Product, schema, {queryParams})
 
-app.get '/', resource.get(), resource.send
-app.post '/', resource.post(), resource.send
-app.put '/:_id', resource.put('_id'), resource.send
-app.get '/:_id', resource.get('_id'), resource.send
-app.delete '/:_id', resource.delete('_id'), resource.send
+# generate express middleware that automatically handles GET, POST, PUT, and DELETE requests:
+app.get '/products', resource.get(), resource.send
+app.post '/products', resource.post(), resource.send
+app.put 'products/:_id', resource.put('_id'), resource.send
+app.get 'products/:_id', resource.get('_id'), resource.send
+app.delete 'products/:_id', resource.delete('_id'), resource.send
 ```
 This abstracts away a lot of the boilerplate such as error handling or validating query parameters, and allows you to focus on higher-level resource design.
 
@@ -77,81 +96,81 @@ app.get '/products', resource.get(), resource.send
 
 ## Defining a schema
 
-### $field
+### field: [String]
 Maps a mongoose model field to a resource field.
 
-``` javascript
+``` coffeescript
 schema = {
   'name': { $field: 'name' }
 }
 ```
 We can also define this with a shorthand notation:
-``` javascript
+``` coffeescript
 schema = {
   'name': 'name'
 }
 ```
 Or even simpler with coffeescript:
-``` javascript
+``` coffeescript
 schema = {
   'name'
 }
 ```
 Note, this can be used to rename a model field to a new name on the resource:
-``` javascript
+``` coffeescript
 schema = {
   'category.name': 'categoryName'
 }
-// {
-//  category: {
-//    name: 'value'
-//  }
-// }
+# => {
+#  category: {
+#    name: 'value'
+#  }
+# }
 ```
 
-### $get
+### get: [Function]
 
 Dynamically get the value whenever a resource is retrieved.
 
-``` javascript
+``` coffeescript
 schema = {
   'totalProductsSold': {
-    $get: (resourcesToReturn, {models, req, res, next}, done) ->
+    get: (resourcesToReturn, {models, req, res, next}, done) ->
       resourcesToReturn.forEach (resource) ->
         resource.totalProductsSold = 10
-      done()
+      done null, resourcesToReturn
   }
 }
 ```
 
-### $set
+### set: [Function]
 
 Dynamically set the value whenever a resource is saved or updated
 
-``` javascript
+``` coffeescript
 schema = {
   'name': {
-    $set: (modelsToSave, {resources, req, res, next}, done) ->
+    set: (modelsToSave, {resources, req, res, next}, done) ->
       modelsToSave.forEach (model) ->
         model.name = model.name.toLowerCase()
-      done()
+      done null, modelsToSave
   }
 }
 ```
 
-### $find
+### find: [Function]
 
 Dynamically find resources with the provided query value. Return an object that will extend the mongoose query. $find is used to define query parameters.
 
-``` javascript
+``` coffeescript
 schema = {
   'soldOn':
-    $find: fibrous (days, {req, res, next}) ->
-      { 'day': $in: days }
+    $find: (days, {req, res, next}, done) ->
+      done null { 'day': $in: days }
 }
 ```
 
-### $optional
+### optional: [Boolean]
 
 If true, do not include the value in the resource unless specifically requested by the client with the '$add' query parameter
 
@@ -167,7 +186,7 @@ schema = {
 
 ```
 
-### $validate
+### validate: [Function]
 
 Return a 400 invalid request if the provided value does not pass the validation test.
 
@@ -180,7 +199,7 @@ schema = {
 }
 ```
 
-### $match
+### match: [RegExp]
 
 Return a 400 invalid request if the provided value does match the given regular expression.
 
@@ -192,7 +211,7 @@ schema = {
 }
 ```
 
-### $type
+### type: [Object]
 
 Convert the type of the value.
 
@@ -211,17 +230,17 @@ schema = {
   }
 }
 ```
-This is especially valuable for query parameters, since they are all a string by default.
+This is especially useful for query parameters, which are a string by default
 
-### $isArray
+### isArray: [Boolean]
 
 Ensure that the query parameter is an Array.
 
 ``` coffeescript
 schema = {
   'daysToSelect': {
-    $isArray: Boolean
-    $find: (days, context, done) -> ...
+    isArray: Boolean
+    find: (days, context, done) -> ...
   }
 }
 ```
