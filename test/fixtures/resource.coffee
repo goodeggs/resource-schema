@@ -63,6 +63,7 @@ module.exports = app = express()
 
 app.get '/', resource.get(), resource.send
 app.post '/', resource.post(), resource.send
+app.put '/', resource.put(), resource.send
 app.put '/:_id', resource.put('_id'), resource.send
 app.get '/:_id', resource.get('_id'), resource.send
 app.delete '/:_id', resource.delete('_id'), resource.send

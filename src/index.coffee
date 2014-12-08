@@ -111,24 +111,55 @@ module.exports = class ResourceSchema
   Generate middleware to handle PUT requests for resource
   ###
   put: (paramId) ->
-    (req, res, next) =>
-      context = {req, res, next}
-      return if not @_isValid(req.query, context)
-      return if not @_isValid(req.body, context)
-      resource = req.body
-      newModelData = @_createModelFromResource resource
+    # PUT single document
+    if paramId
+      (req, res, next) =>
+        context = {req, res, next}
+        return if not @_isValid(req.query, context)
+        return if not @_isValid(req.body, context)
+        resource = req.body
+        newModelData = @_createModelFromResource resource
 
-      idValue = req.params[paramId]
-      query = {}
-      query[paramId] = idValue
-      @_buildContext(context, [resource], [newModelData])
-      .then =>
-        @_applySetters([resource], [newModelData], context)
-        @Model.findOneAndUpdate(query, newModelData, {upsert: true}).lean().exec (err, model) =>
-          return res.send 400, err if err
-          return res.send 404, 'resource not found' if !model
-          res.status(200)
-          @_sendResource(model, context)
+        idValue = req.params[paramId]
+        query = {}
+        query[paramId] = idValue
+        @_buildContext(context, [resource], [newModelData])
+        .then =>
+          @_applySetters([resource], [newModelData], context)
+          @Model.findOneAndUpdate(query, newModelData, {upsert: true}).lean().exec (err, model) =>
+            return res.send 400, err if err
+            return res.send 404, 'resource not found' if !model
+            res.status(200)
+            @_sendResource(model, context)
+
+    # PUT bulk documents
+    else
+      (req, res, next) =>
+        context = {req, res, next}
+        return if not @_isValid(req.query, context)
+        return if not @_isValid(req.body, context)
+        resources = req.body
+        for resource in resources
+          return if not @_isValid(resource, context)
+        models = resources.map (resource) =>
+          @_convertTypes(resource, context)
+          @_createModelFromResource(resource)
+
+        @_buildContext(context, resources, models)
+        .then =>
+          @_applySetters(resources, models, context)
+          savePromises = []
+          models.forEach (model) =>
+            d = q.defer()
+            modelId = model._id
+            return res.send 400, '_id required to update' if not modelId
+            @Model.findByIdAndUpdate(modelId, model, {upsert: true}).lean().exec (err, model) =>
+              return res.send 400, err if err
+              d.resolve(model)
+            savePromises.push d.promise
+
+          q.all(savePromises).then (updatedModels) =>
+            @_sendResources(updatedModels, context)
 
   ###
   Generate middleware to handle DELETE requests for resource
