@@ -25,13 +25,17 @@ schema = {
   # Model field 'active' renamed as isActive
   'isActive': 'active'
 
+  # Dynamically get code whenever the resource is requested:
+  'code':
+    get: (resource) -> resource.letter + resource.number
+
   # Dynamically get totalQuantitySold whenever the resource is requested:
   'totalQuantitySold':
-    optional: true
-    get: (resourcesToReturn, done) ->
-      getTotalQuantitySoldById (err, totalQuantitySoldByResourceId) ->
-        resourcesToReturn.forEach (resource) ->
-          resource.totalQuantitySold = totalQuantitySoldByResourceId[resource]
+    context:
+      totalQuantitySoldByProductId: (resources, {}, done) ->
+        getTotalQuantitySoldById(resources, done)
+    get: (product, {totalQuantitySoldByProductId}) ->
+      totalQuantitySoldByProductId[product._id]
 }
 
 queryParams =

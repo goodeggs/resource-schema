@@ -46,14 +46,7 @@ module.exports = class ResourceSchema
       modelQuery.limit(limit) if limit?
       modelQuery.exec (err, models) =>
         if err then return next err
-        resources = models.map (model) => @_createResourceFromModel(model, req.query.$select)
-        @_buildContext(context, resources, models)
-        .then =>
-          @_applyGetters(resources, context)
-          @_applyFilters(resources, context)
-        .then (resources) =>
-          res.body = resources
-          next()
+        @_sendResources(models, context)
 
   _getOne: (paramId) =>
     (req, res, next) =>
@@ -81,18 +74,38 @@ module.exports = class ResourceSchema
     (req, res, next) =>
       context = {req, res, next}
       return if not @_isValid(req.query, context)
-      resource = req.body
-      return if not @_isValid(resource, context)
-      @_convertTypes(resource, {req, res, next})
-      newModelData = @_createModelFromResource resource
-      @_buildContext(context, [resource], [newModelData])
-      .then =>
-        @_applySetters([resource], [newModelData], context)
-        model = new @Model(newModelData)
-        model.save (err, modelSaved) =>
-          return res.status(400).send(err) if err
-          res.status(201)
-          @_sendResource(model, context)
+
+      # Post several document
+      if Array.isArray req.body
+        resources = req.body
+        for resource in resources
+          return if not @_isValid(resource, context)
+        models = resources.map (resource) =>
+          @_convertTypes(resource, context)
+          @_createModelFromResource(resource)
+        @_buildContext(context, resources, models)
+        .then =>
+          @_applySetters(resources, models, context)
+          @Model.create models, (err, modelsSaved...) =>
+            return res.status(400).send(err) if err
+            res.status(201)
+            @_sendResources(modelsSaved, context)
+
+      # Post single document
+      else
+        resource = req.body
+        return if not @_isValid(resource, context)
+        # TODO: is this necessary here? Mongoose will catch type problems...
+        @_convertTypes(resource, context)
+        newModelData = @_createModelFromResource resource
+        @_buildContext(context, [resource], [newModelData])
+        .then =>
+          @_applySetters([resource], [newModelData], context)
+          model = new @Model(newModelData)
+          model.save (err, modelSaved) =>
+            return res.status(400).send(err) if err
+            res.status(201)
+            @_sendResource(model, context)
 
   ###
   Generate middleware to handle PUT requests for resource
@@ -547,4 +560,15 @@ module.exports = class ResourceSchema
     .then =>
       @_applyGetters([resource], context)
       res.body = resource
+      next()
+
+  _sendResources: (models, context) ->
+    {req, res, next} = context
+    resources = models.map (model) => @_createResourceFromModel(model, req.query.$select)
+    @_buildContext(context, resources, models)
+    .then =>
+      @_applyGetters(resources, context)
+      @_applyFilters(resources, context)
+    .then (resources) =>
+      res.body = resources
       next()
