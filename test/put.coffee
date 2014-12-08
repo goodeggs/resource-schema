@@ -16,11 +16,15 @@ describe '.put(id)', ->
   describe 'updating model values', ->
     before fibrous ->
       Model.sync.remove()
+      ParentModel.sync.remove()
       model = Model.sync.create
         name: 'test'
         product:
           name: 'apples'
           price: 25
+      ParentModel.sync.create
+        name: 'parent'
+        modelIds: [model._id]
 
       response = request.sync.put
         url: "http://127.0.0.1:4000/resource/#{model._id}"
@@ -35,6 +39,9 @@ describe '.put(id)', ->
       expect(response.body.productName).to.equal 'berries'
       expect(response.body.product.price).to.equal 25
       expect(response.body._id).to.be.ok
+
+    it 'returns the updated resource with dynamic fields', ->
+      expect(response.body.parentName).to.equal 'parent'
 
     it 'saves to the DB, in the model schema', fibrous ->
       modelsFound = Model.sync.find()

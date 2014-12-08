@@ -8,10 +8,11 @@ RESERVED_KEYWORDS = require './reserved_keywords'
 
 module.exports = class ResourceSchema
   constructor: (@Model, schema, @options = {}) ->
-    if schema
-      @schema = @_normalizeSchema(schema)
-    else
-      @schema = @_generateSchemaFromModel(@Model)
+    @schema =
+      if schema
+        @_normalizeSchema(schema)
+      else
+        @_generateSchemaFromModel(@Model)
 
   ###
   Generate middleware to handle GET requests for resource
@@ -71,12 +72,7 @@ module.exports = class ResourceSchema
       modelQuery.exec (err, model) =>
         return res.status(400).send(err) if err
         return res.status(404).send("No #{paramId} found with id #{idValue}") if not model?
-        resource = @_createResourceFromModel(model, req.query.$select)
-        @_buildContext(context, [resource], [model])
-        .then =>
-          @_applyGetters([resource], context)
-          res.body = resource
-          next()
+        @_sendResource(model, context)
 
   ###
   Generate middleware to handle POST requests for resource
@@ -95,10 +91,8 @@ module.exports = class ResourceSchema
         model = new @Model(newModelData)
         model.save (err, modelSaved) =>
           return res.status(400).send(err) if err
-          resource = @_createResourceFromModel(modelSaved, req.query.$select)
           res.status(201)
-          res.body = resource
-          next()
+          @_sendResource(model, context)
 
   ###
   Generate middleware to handle PUT requests for resource
@@ -117,13 +111,11 @@ module.exports = class ResourceSchema
       @_buildContext(context, [resource], [newModelData])
       .then =>
         @_applySetters([resource], [newModelData], context)
-        @Model.findOneAndUpdate(query, newModelData, {upsert: true}).lean().exec (err, modelUpdated) =>
+        @Model.findOneAndUpdate(query, newModelData, {upsert: true}).lean().exec (err, model) =>
           return res.send 400, err if err
-          return res.send 404, 'resource not found' if !modelUpdated
-          resource = @_createResourceFromModel(modelUpdated, req.query.$select)
+          return res.send 404, 'resource not found' if !model
           res.status(200)
-          res.body = resource
-          next()
+          @_sendResource(model, context)
 
   ###
   Generate middleware to handle DELETE requests for resource
@@ -547,3 +539,12 @@ module.exports = class ResourceSchema
           contextPromises.push d.promise
 
     q.all(contextPromises)
+
+  _sendResource: (model, context) ->
+    {req, res, next} = context
+    resource = @_createResourceFromModel(model, req.query.$select)
+    @_buildContext(context, [resource], [model])
+    .then =>
+      @_applyGetters([resource], context)
+      res.body = resource
+      next()
