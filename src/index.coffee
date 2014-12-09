@@ -426,6 +426,9 @@ module.exports = class ResourceSchema
     for schemaKey in schemaKeys
       schema[schemaKey] =
         field: schemaKey
+
+    _(schema).extend(@_normalizeQueryParams())
+
     schema
 
   ###

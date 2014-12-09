@@ -1,8 +1,15 @@
 Model = require './model'
 ResourceSchema = require '../..'
 express = require 'express'
+mongoose = require 'mongoose'
 
-resource = new ResourceSchema(Model)
+queryParams =
+  ids:
+    isArray: yes
+    type: mongoose.Types.ObjectId
+    find: (ids) -> _id: $in: ids
+
+resource = new ResourceSchema(Model, null, {queryParams})
 
 module.exports = app = express()
 
