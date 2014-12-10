@@ -1,4 +1,8 @@
 mongoose = require 'mongoose'
+url = require 'url'
+namespacedRequest = require 'namespaced-request'
+
+port = process.env.PORT || 93280
 
 suiteHelpers =
   withModel: (args...) ->
@@ -26,7 +30,8 @@ suiteHelpers =
   withServer: (appFn) ->
     beforeEach (done) ->
       app = appFn.call @
-      @server = app.listen 83029, done
+      @server = app.listen port, done
+      @request = namespacedRequest "http://127.0.0.1:#{port}"
 
     afterEach (done) ->
       return process.nextTick done unless @server
