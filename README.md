@@ -17,24 +17,34 @@ ResourceSchema allows you to define complex RESTful resources in a simple and de
 
 ```coffeescript
 schema = {
-  # Return these model values when requesting the resource:
   '_id': '_id'
-  'name': 'name'
-  'day': 'day'
 
-  # Model field 'active' renamed as isActive
+  # Get resource field 'name' from model field 'name'
+  # Convert the name to lowercase whenever saved
+  'name':
+    field: 'name'
+    set: (productResource) -> productResource.name.toLowerCase()
+
+  # make sure the day matches the specified format before saving
+  'day':
+    field: 'day'
+    match: /[0-9]{4}-[0-9]{2}-[0-9]{2}/
+
+  # Model field 'active' renamed to resource field 'isActive'
   'isActive': 'active'
 
-  # Dynamically get code whenever the resource is requested:
+  # Dynamically get field 'code' whenever the resource is requested:
   'code':
-    get: (resource) -> resource.letter + resource.number
+    get: (model) -> model.letter + model.number
 
-  # Dynamically get totalQuantitySold whenever the resource is requested:
+  # Dynamically get totalQuantitySold whenever the resource is requested.
+  # Resolve 'totalQuantitySoldByProductId' before applying the getter.
   'totalQuantitySold':
     resolve:
-      totalQuantitySoldByProductId: getTotalQuantitySoldById
-    get: (product, {totalQuantitySoldByProductId}) ->
-      totalQuantitySoldByProductId[product._id]
+      totalQuantitySoldByProductId: ({models}, done) ->
+        getTotalQuantitySoldById(models, done)
+    get: (productModel, {totalQuantitySoldByProductId}) ->
+      totalQuantitySoldByProductId[productModel._id]
 }
 
 queryParams =
@@ -61,7 +71,7 @@ app.put 'products/:_id', resource.put('_id'), resource.send
 app.get 'products/:_id', resource.get('_id'), resource.send
 app.delete 'products/:_id', resource.delete('_id'), resource.send
 ```
-This abstracts away a lot of the boilerplate such as error handling or validating query parameters, and allows you to focus on higher-level resource design.
+This abstracts away a lot of the boilerplate such as building queries, validating values, and handling errors, and allows you to focus on higher-level resource design.
 
 ## Generating Middleware
 

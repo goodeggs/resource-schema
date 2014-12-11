@@ -229,7 +229,6 @@ module.exports = class ResourceSchema
       else if @schema[resourceField].field
         modelQuery[@schema[resourceField].field] = value
 
-
     q.all(queryPromises).then ->
       deferred.resolve(modelQuery)
 
