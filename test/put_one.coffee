@@ -67,6 +67,31 @@ describe 'PUT one', ->
       expect(Model.sync.findById(model._id).active).to.equal false
       expect(response.body.active).to.equal false
 
+  describe 'putting custom key (resource created before)', ->
+    before fibrous ->
+      ModelCustomKey.sync.remove()
+      modelCustomKey = ModelCustomKey.sync.create
+        key: 'foo'
+        name: 'test1'
+
+      response = request.sync.put
+        url: "http://127.0.0.1:4000/resource_custom_key/foo"
+        json:
+          key: 'foo'
+          name: 'test2'
+
+    it 'returns the updated resource (does not error for trying to create new _id)', ->
+      expect(response.statusCode).to.equal 200
+      expect(response.body).to.deep.equal
+        key: 'foo'
+        name: 'test2'
+
+    it 'creates the resource in the database', fibrous ->
+      modelFound = ModelCustomKey.sync.findOne(key: 'foo')
+      expect(ModelCustomKey.sync.count()).to.equal 1
+      expect(modelFound.name).to.equal 'test2'
+      expect(modelFound.key).to.equal 'foo'
+
   describe 'putting to uncreated resource (upserting)', ->
     before fibrous ->
       ModelCustomKey.sync.remove()
@@ -104,3 +129,4 @@ describe 'PUT one', ->
     it 'sets the value to lowercase when saved', fibrous ->
       model = Model.sync.findOne()
       expect(model.name).to.equal 'goodbye'
+      expect(response.body.name).to.equal 'goodbye'

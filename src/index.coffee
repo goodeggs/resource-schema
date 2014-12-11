@@ -139,6 +139,7 @@ module.exports = class ResourceSchema
 
       @_buildContext(context, [resource], [model]).then =>
         @_applySetters(resourceByModelId, [model], context)
+        delete model._id
         @Model.findOneAndUpdate(query, model, {upsert: true}).lean().exec (err, model) =>
           return res.send 400, err if err
           return res.send 404, 'resource not found' if !model
@@ -165,6 +166,7 @@ module.exports = class ResourceSchema
         d = q.defer()
         modelId = model._id
         return res.send 400, '_id required to update' if not modelId
+        delete model._id
         @Model.findByIdAndUpdate(modelId, model, {upsert: true}).lean().exec (err, model) =>
           return res.send 400, err if err
           d.resolve(model)
@@ -237,7 +239,7 @@ module.exports = class ResourceSchema
 
     deferred.promise
 
-  _createModelFromResource: (resource) =>
+  _createModelFromResource: (resource, addId) =>
     model = {}
     for resourceField, config of @schema
       if config.field
