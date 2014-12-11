@@ -43,6 +43,10 @@ schema = {
   'parentId':
     get: (model, {parentIdByChildId}) ->
       parentIdByChildId[model._id]
+
+  'nested':
+    'dynamicValue':
+      get: -> 2
 }
 
 resource = new ResourceSchema Model, schema, {

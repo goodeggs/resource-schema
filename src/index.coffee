@@ -212,7 +212,10 @@ module.exports = class ResourceSchema
     for resourceField, value of resourceQuery
       # apply sync finders
       if typeof @schema[resourceField].find is 'function'
-        query = @schema[resourceField].find value, {req, res, next}
+        try
+          query = @schema[resourceField].find value, {req, res, next}
+        catch e
+          res.send 500, e.toString()
         deepExtend(modelQuery, query)
 
       # apply async finders
@@ -272,7 +275,10 @@ module.exports = class ResourceSchema
     models.forEach (model) =>
       for resourceField, config of @schema
         continue if typeof config.set isnt 'function'
-        model[@schema[resourceField].field] = config.set(resourceByModelId[model._id], context)
+        try
+          dot.set(model, @schema[resourceField].field, config.set(resourceByModelId[model._id.toString()], context))
+        catch e
+          res.send 500, e.toString()
 
   ###
   Wait for all getters to update resources
@@ -285,7 +291,10 @@ module.exports = class ResourceSchema
       for resourceField, config of @schema
         continue if resourceField not in selectedResourceFields
         continue if typeof config.get isnt 'function'
-        resource[resourceField] = config.get(model, context)
+        try
+          dot.set resource, resourceField, config.get(model, context)
+        catch e
+          res.send 500, e.toString()
 
   ###
   Get $group config used for aggregating the model
@@ -588,6 +597,7 @@ module.exports = class ResourceSchema
       do (resolveVar, resolveMethod) =>
         d = q.defer()
         resolveMethod context, (err, result) ->
+          res.send 500, err.toString() if err
           context[resolveVar] = result
           d.resolve()
 
@@ -604,6 +614,7 @@ module.exports = class ResourceSchema
         do (resolveVar, resolveMethod) =>
           d = q.defer()
           resolveMethod context, (err, result) ->
+            res.send 500, err.toString() if err
             context[resolveVar] = result
             d.resolve()
 
@@ -626,7 +637,7 @@ module.exports = class ResourceSchema
 
     resourceByModelId = {}
     resources = models.map (model) =>
-      if model._id not instanceof mongoose.Types.ObjectId and typeof model._id is 'object'
+      if not mongoose.Types.ObjectId.isValid(model._id.toString())
         model._id = _(model._id).values().join('|')
       resource = @_createResourceFromModel(model, req.query.$select)
       resourceByModelId[model._id.toString()] = resource

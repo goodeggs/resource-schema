@@ -15,7 +15,7 @@ describe 'GET many', ->
   describe 'no search fields', ->
     before fibrous ->
       Model.sync.remove()
-      Model.sync.create name: 'test'
+      @model = Model.sync.create name: 'test'
       response = request.sync.get
         url: 'http://127.0.0.1:4000/resource',
         json: true
@@ -207,6 +207,21 @@ describe 'GET many', ->
       expect(response.body[0].parentName).to.equal 'banana'
       expect(response.body[1].parentName).to.equal 'banana'
       expect(response.body[2].parentName).to.equal 'orange'
+
+  describe 'get nested field', ->
+    before fibrous ->
+      ParentModel.sync.remove()
+      Model.sync.remove()
+      model1 = Model.sync.create name: 'foo'
+
+    it 'returns the nested field as a normal object (not a dot string)', fibrous ->
+      response = request.sync.get
+        url: 'http://127.0.0.1:4000/resource',
+        json: true
+
+      expect(response.statusCode).to.equal 200
+      expect(response.body.length).to.equal 1
+      expect(response.body[0].nested.dynamicValue).to.equal 2
 
   describe 'options.defaultQuery', ->
     {model} = {}
