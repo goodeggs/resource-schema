@@ -208,32 +208,6 @@ describe 'GET many', ->
       expect(response.body[1].parentName).to.equal 'banana'
       expect(response.body[2].parentName).to.equal 'orange'
 
-  describe 'second dynamic get field', ->
-    {model} = {}
-    before fibrous ->
-      ParentModel.sync.remove()
-      Model.sync.remove()
-      model1 = Model.sync.create name: 'foo'
-      model2 = Model.sync.create name: 'bar'
-      model3 = Model.sync.create name: 'baz'
-      parentModel1 = ParentModel.sync.create
-        name: 'banana'
-        modelIds: [model1._id, model2._id]
-      parentModel2 = ParentModel.sync.create
-        name: 'orange'
-        modelIds: [model3._id]
-
-    it 'returns all fields in the model', fibrous ->
-      response = request.sync.get
-        url: 'http://127.0.0.1:4000/resource',
-        json: true
-
-      expect(response.statusCode).to.equal 200
-      expect(response.body.length).to.equal 3
-      expect(response.body[0].secondGet).to.equal 'test'
-      expect(response.body[1].secondGet).to.equal 'test'
-      expect(response.body[2].secondGet).to.equal 'test'
-
   describe 'options.defaultQuery', ->
     {model} = {}
     before fibrous ->
@@ -260,6 +234,29 @@ describe 'GET many', ->
       expect(response.body.length).to.equal 2
       expect(response.body[0].day).to.equal '2014-09-27'
       expect(response.body[1].day).to.equal '2014-10-05'
+
+  describe 'options.resolve', ->
+    {model} = {}
+    before fibrous ->
+      ParentModel.sync.remove()
+      Model.sync.remove()
+
+      # default limit is after 2014-10-05
+      @model = Model.sync.create
+        name: 'foo'
+        day: '2014-09-18'
+      @parentModel = ParentModel.sync.create
+        name: 'parent'
+        modelIds: [@model._id]
+
+    it 'applies the resolve to all getters and setters', fibrous ->
+      response = request.sync.get
+        url: 'http://127.0.0.1:4000/resource',
+        json: true
+
+      expect(response.statusCode).to.equal 200
+      expect(response.body.length).to.equal 1
+      expect(response.body[0].parentId).to.equal @parentModel._id.toString()
 
   describe 'options.queryParams', ->
     {model} = {}

@@ -35,28 +35,44 @@ schema = {
       ParentModel.findOne {name: searchValue}, (err, parentModel) ->
         done null, { _id: $in: parentModel.modelIds }
     resolve:
-      parentModelsByChildId: ({models}, done) -> getParentModelsByChildId(models, done)
-    get: (model, {parentModelsByChildId}) ->
-      parentModelsByChildId[model._id]?.name
+      parentNameByChildId: ({models}, done) ->
+        getParentNameByChildId({models}, done)
+    get: (model, {parentNameByChildId}) ->
+      parentNameByChildId[model._id]
 
-  # TODO: remove, this is no longer helpful
-  'secondGet':
-    get: -> 'test'
+  'parentId':
+    get: (model, {parentIdByChildId}) ->
+      parentIdByChildId[model._id]
 }
 
-resource = new ResourceSchema Model, schema,
+resource = new ResourceSchema Model, schema, {
+  resolve:
+    parentIdByChildId: ({models}, done) -> getParentIdByChildId({models}, done)
+}
 
-getParentModelsByChildId = (models, done) ->
+getParentNameByChildId = ({models}, done) ->
   models = [models] if not Array.isArray models
   ids = _(models).pluck('_id')
 
-  parentModels = ParentModel.find {modelIds: $in: ids}, (err, parentModels) ->
+  ParentModel.find {modelIds: $in: ids}, (err, parentModels) ->
     return done(err) if err
-    parentModelsByChildId = {}
+    parentNameByChildId = {}
     for parentModel in parentModels
       for modelId in parentModel.modelIds
-        parentModelsByChildId[modelId.toString()] = parentModel
-    done null, parentModelsByChildId
+        parentNameByChildId[modelId.toString()] = parentModel.name
+    done null, parentNameByChildId
+
+getParentIdByChildId = ({models}, done) ->
+  models = [models] if not Array.isArray models
+  ids = _(models).pluck('_id')
+
+  ParentModel.find {modelIds: $in: ids}, (err, parentModels) ->
+    return done(err) if err
+    parentIdByChildId = {}
+    for parentModel in parentModels
+      for modelId in parentModel.modelIds
+        parentIdByChildId[modelId.toString()] = parentModel._id.toString()
+    done null, parentIdByChildId
 
 module.exports = app = express()
 

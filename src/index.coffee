@@ -581,6 +581,19 @@ module.exports = class ResourceSchema
     context.models = models
     selectedResourceFields = @_getSelectedResourceFields(req.query)
 
+    # options resolvers
+    for resolveVar, resolveMethod of @options.resolve
+      continue if typeof resolveMethod isnt 'function'
+      continue if context[resolveVar]
+      do (resolveVar, resolveMethod) =>
+        d = q.defer()
+        resolveMethod context, (err, result) ->
+          context[resolveVar] = result
+          d.resolve()
+
+        resolvePromises.push d.promise
+
+    # schema resolvers
     for resourceField, config of @schema
       continue if resourceField not in selectedResourceFields
       continue if typeof config.resolve isnt 'object'
@@ -588,7 +601,7 @@ module.exports = class ResourceSchema
       for resolveVar, resolveMethod of config.resolve
         continue if typeof resolveMethod isnt 'function'
         continue if context[resolveVar]
-        do =>
+        do (resolveVar, resolveMethod) =>
           d = q.defer()
           resolveMethod context, (err, result) ->
             context[resolveVar] = result
