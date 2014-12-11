@@ -1,13 +1,13 @@
 sinon = require 'sinon'
 fibrous = require 'fibrous'
 mongoose = require 'mongoose'
-Model = require './fixtures/model.coffee'
-ParentModel = require './fixtures/parent_model.coffee'
+Model = require '../fixtures/model.coffee'
+ParentModel = require '../fixtures/parent_model.coffee'
 expect = require('chai').expect
 request = require 'request'
-require './support/bootstrap'
+require '../support/bootstrap'
 
-MongooseResource = require '..'
+MongooseResource = require '../..'
 
 {response, model} = {}
 
