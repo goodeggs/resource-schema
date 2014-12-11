@@ -12,7 +12,7 @@ MongooseResource = require '..'
 
 {response, model} = {}
 
-describe '.put(id)', ->
+describe 'PUT one', ->
   describe 'updating model values', ->
     before fibrous ->
       Model.sync.remove()

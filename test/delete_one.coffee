@@ -11,7 +11,7 @@ MongooseResource = require '..'
 
 {response, model} = {}
 
-describe '.delete(id)', ->
+describe 'DELETE one', ->
   {model} = {}
   describe 'no params', ->
     before fibrous ->

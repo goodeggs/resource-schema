@@ -12,7 +12,7 @@ MongooseResource = require '..'
 
 {response, model} = {}
 
-describe '.put() (bulk)', ->
+describe 'PUT many', ->
   describe 'updating model values', ->
     before fibrous ->
       Model.sync.remove()

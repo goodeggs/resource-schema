@@ -28,14 +28,12 @@ module.exports = class ResourceSchema
     context = {req, res, next}
     return if not @_isValid(req.query, context)
 
-    limit = @_getLimit req.query
-    modelSelect = @_getModelSelectFields req.query
     @_getMongoQuery(req.query, context)
     .then (mongoQuery) =>
       # normal (non aggregate) resource
       if not @options.groupBy
         modelQuery = @Model.find(mongoQuery)
-        modelQuery.select(modelSelect)
+        modelQuery.select(@_getModelSelectFields req.query)
         modelQuery.lean()
 
       # aggregate resource
@@ -44,7 +42,8 @@ module.exports = class ResourceSchema
         modelQuery.match(mongoQuery)
         modelQuery.group(@_getGroupQuery())
 
-      modelQuery.limit(limit) if limit?
+      limit = @_getLimit req.query
+      modelQuery.limit(limit) if limit
       modelQuery.exec (err, models) =>
         if err then return next err
         @_sendResources(models, context)
@@ -84,14 +83,10 @@ module.exports = class ResourceSchema
     context = {req, res, next}
     resource = req.body
     return if not @_isValid(resource, context)
-    # TODO: is this necessary here? Mongoose will catch type problems...
-    @_convertTypes(resource, context)
     model = @_createModelFromResource resource
-    model._id = new mongoose.Types.ObjectId()
     resourceByModelId = {}
     resourceByModelId[model._id.toString()] = resource
-    @_applyResolvers(context, [resource], [model])
-    .then =>
+    @_buildContext(context, [resource], [model]).then =>
       @_applySetters(resourceByModelId, [model], context)
       model = new @Model(model)
       model.save (err, modelSaved) =>
@@ -106,13 +101,10 @@ module.exports = class ResourceSchema
       return if not @_isValid(resource, context)
     resourceByModelId = {}
     models = resources.map (resource) =>
-      @_convertTypes(resource, context)
       model = @_createModelFromResource(resource)
-      model._id = new mongoose.Types.ObjectId()
       resourceByModelId[model._id.toString()] = resource
       model
-    @_applyResolvers(context, resources, models)
-    .then =>
+    @_buildContext(context, resources, models).then =>
       @_applySetters(resourceByModelId, models, context)
       @Model.create models, (err, modelsSaved...) =>
         return res.status(400).send(err) if err
@@ -140,16 +132,12 @@ module.exports = class ResourceSchema
       query[paramId] = idValue
 
       model = @_createModelFromResource resource
-      try
-        model._id ?= new mongoose.Types.ObjectId(idValue)
-      catch
-        model._id ?= new mongoose.Types.ObjectId()
+      model[paramId] = idValue
 
       resourceByModelId = {}
       resourceByModelId[model._id.toString()] = resource
 
-      @_applyResolvers(context, [resource], [model])
-      .then =>
+      @_buildContext(context, [resource], [model]).then =>
         @_applySetters(resourceByModelId, [model], context)
         @Model.findOneAndUpdate(query, model, {upsert: true}).lean().exec (err, model) =>
           return res.send 400, err if err
@@ -166,13 +154,11 @@ module.exports = class ResourceSchema
       return if not @_isValid(resource, context)
     resourceByModelId = {}
     models = resources.map (resource) =>
-      @_convertTypes(resource, context)
       model = @_createModelFromResource(resource)
       resourceByModelId[model._id.toString()] = resource
       model
 
-    @_applyResolvers(context, resources, models)
-    .then =>
+    @_buildContext(context, resources, models).then =>
       @_applySetters(resourceByModelId, models, context)
       savePromises = []
       models.forEach (model) =>
@@ -255,6 +241,7 @@ module.exports = class ResourceSchema
       if config.field
         value = dot.get resource, resourceField
         dot.set(model, config.field, value) if value isnt undefined
+    model._id ?= new mongoose.Types.ObjectId()
     model
 
   _createResourceFromModel: (model, resourceFields) =>
@@ -279,7 +266,7 @@ module.exports = class ResourceSchema
     resource
 
   ###
-  Wait for all set queries to update models
+  Wait for all setters to update models
   ###
   _applySetters: (resourceByModelId, models, context) =>
     {req, res, next} = context
@@ -289,7 +276,7 @@ module.exports = class ResourceSchema
         model[@schema[resourceField].field] = config.set(resourceByModelId[model._id], context)
 
   ###
-  Wait for all get queries to update resources
+  Wait for all getters to update resources
   ###
   _applyGetters: (resourceByModelId, models, context) =>
     {req, res, next, models} = context
@@ -325,7 +312,7 @@ module.exports = class ResourceSchema
   @returns [Number] Max number of resources to return in response
   ###
   _getLimit: (query) =>
-    query.$limit or @options.defaultLimit
+    query.$limit or @options.defaultLimit or 0
 
   ###
   Get resource fields that will be returned with this request. Reject everything
@@ -588,9 +575,8 @@ module.exports = class ResourceSchema
   ###
   Apply all resolvers. Data will be added to context, and can be used inside getters and setters.
   ###
-  _applyResolvers: (context, resources, models) ->
+  _buildContext: (context, resources, models) ->
     {req, res, next} = context
-
     resolvePromises = []
     context.resources = resources
     context.models = models
@@ -618,8 +604,7 @@ module.exports = class ResourceSchema
     resource = @_createResourceFromModel(model, req.query.$select)
     resourceByModelId = {}
     resourceByModelId[model._id.toString()] = resource
-    @_applyResolvers(context, [resource], [model])
-    .then =>
+    @_buildContext(context, [resource], [model]).then =>
       @_applyGetters(resourceByModelId, [model], context)
       res.body = resource
       next()
@@ -635,8 +620,7 @@ module.exports = class ResourceSchema
       resourceByModelId[model._id.toString()] = resource
       resource
 
-    @_applyResolvers(context, resources, models)
-    .then =>
+    @_buildContext(context, resources, models).then =>
       @_applyGetters(resourceByModelId, models, context)
       @_applyFilters(resources, context)
     .then (resources) =>

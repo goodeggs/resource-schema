@@ -11,7 +11,7 @@ MongooseResource = require '..'
 
 {response, model} = {}
 
-describe '.get(id)', ->
+describe 'GET one', ->
   {model} = {}
   describe 'no params', ->
     before fibrous ->

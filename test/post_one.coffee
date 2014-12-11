@@ -10,7 +10,7 @@ MongooseResource = require '..'
 
 {response, model} = {}
 
-describe '.post()', ->
+describe 'POST one', ->
   before fibrous ->
     Model.sync.remove()
 

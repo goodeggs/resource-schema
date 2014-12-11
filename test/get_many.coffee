@@ -11,7 +11,7 @@ MongooseResource = require '..'
 
 {response, model} = {}
 
-describe '.get()', ->
+describe 'GET many', ->
   describe 'no search fields', ->
     before fibrous ->
       Model.sync.remove()

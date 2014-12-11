@@ -10,7 +10,7 @@ MongooseResource = require '..'
 
 {response, model} = {}
 
-describe '.post() (bulk)', ->
+describe 'POST many', ->
   before fibrous ->
     Model.sync.remove()
 
