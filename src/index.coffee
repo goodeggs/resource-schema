@@ -22,9 +22,9 @@ module.exports = class ResourceSchema
     if (paramId)
       @_getOne(paramId)
     else
-      @_getAll
+      @_getMany
 
-  _getAll: (req, res, next) =>
+  _getMany: (req, res, next) =>
     context = {req, res, next}
     return if not @_isValid(req.query, context)
 
@@ -73,113 +73,119 @@ module.exports = class ResourceSchema
   ###
   post: ->
     (req, res, next) =>
-      context = {req, res, next}
       return if not @_isValid(req.query, context)
 
-      # Post several document
       if Array.isArray req.body
-        resources = req.body
-        for resource in resources
-          return if not @_isValid(resource, context)
-        resourceByModelId = {}
-        models = resources.map (resource) =>
-          @_convertTypes(resource, context)
-          model = @_createModelFromResource(resource)
-          model._id = new mongoose.Types.ObjectId()
-          resourceByModelId[model._id.toString()] = resource
-          model
-        @_applyResolvers(context, resources, models)
-        .then =>
-          @_applySetters(resourceByModelId, models, context)
-          @Model.create models, (err, modelsSaved...) =>
-            return res.status(400).send(err) if err
-            res.status(201)
-            @_sendResources(modelsSaved, context)
-
-      # Post single document
+        @_postMany(req, res, next)
       else
-        resource = req.body
-        return if not @_isValid(resource, context)
-        # TODO: is this necessary here? Mongoose will catch type problems...
-        @_convertTypes(resource, context)
-        model = @_createModelFromResource resource
-        model._id = new mongoose.Types.ObjectId()
-        resourceByModelId = {}
-        resourceByModelId[model._id.toString()] = resource
-        @_applyResolvers(context, [resource], [model])
-        .then =>
-          @_applySetters(resourceByModelId, [model], context)
-          model = new @Model(model)
-          model.save (err, modelSaved) =>
-            return res.status(400).send(err) if err
-            res.status(201)
-            @_sendResource(model, context)
+        @_postOne(req, res, next)
+
+  _postOne: (req, res, next) ->
+    context = {req, res, next}
+    resource = req.body
+    return if not @_isValid(resource, context)
+    # TODO: is this necessary here? Mongoose will catch type problems...
+    @_convertTypes(resource, context)
+    model = @_createModelFromResource resource
+    model._id = new mongoose.Types.ObjectId()
+    resourceByModelId = {}
+    resourceByModelId[model._id.toString()] = resource
+    @_applyResolvers(context, [resource], [model])
+    .then =>
+      @_applySetters(resourceByModelId, [model], context)
+      model = new @Model(model)
+      model.save (err, modelSaved) =>
+        return res.status(400).send(err) if err
+        res.status(201)
+        @_sendResource(model, context)
+
+  _postMany: (req, res, next) ->
+    context = {req, res, next}
+    resources = req.body
+    for resource in resources
+      return if not @_isValid(resource, context)
+    resourceByModelId = {}
+    models = resources.map (resource) =>
+      @_convertTypes(resource, context)
+      model = @_createModelFromResource(resource)
+      model._id = new mongoose.Types.ObjectId()
+      resourceByModelId[model._id.toString()] = resource
+      model
+    @_applyResolvers(context, resources, models)
+    .then =>
+      @_applySetters(resourceByModelId, models, context)
+      @Model.create models, (err, modelsSaved...) =>
+        return res.status(400).send(err) if err
+        res.status(201)
+        @_sendResources(modelsSaved, context)
 
   ###
   Generate middleware to handle PUT requests for resource
   ###
   put: (paramId) ->
-    # PUT single document
     if paramId
-      (req, res, next) =>
-        context = {req, res, next}
-        return if not @_isValid(req.query, context)
-        return if not @_isValid(req.body, context)
-        resource = req.body
-
-        idValue = req.params[paramId]
-        query = {}
-        query[paramId] = idValue
-
-        model = @_createModelFromResource resource
-        try
-          model._id ?= new mongoose.Types.ObjectId(idValue)
-        catch
-          model._id ?= new mongoose.Types.ObjectId()
-
-        resourceByModelId = {}
-        resourceByModelId[model._id.toString()] = resource
-
-        @_applyResolvers(context, [resource], [model])
-        .then =>
-          @_applySetters(resourceByModelId, [model], context)
-          @Model.findOneAndUpdate(query, model, {upsert: true}).lean().exec (err, model) =>
-            return res.send 400, err if err
-            return res.send 404, 'resource not found' if !model
-            res.status(200)
-            @_sendResource(model, context)
-
-    # PUT bulk documents
+      @_putOne(paramId)
     else
-      (req, res, next) =>
-        context = {req, res, next}
-        return if not @_isValid(req.query, context)
-        return if not @_isValid(req.body, context)
-        resources = req.body
-        for resource in resources
-          return if not @_isValid(resource, context)
-        resourceByModelId = {}
-        models = resources.map (resource) =>
-          @_convertTypes(resource, context)
-          model = @_createModelFromResource(resource)
-          resourceByModelId[model._id.toString()] = resource
-          model
+      @_putMany
 
-        @_applyResolvers(context, resources, models)
-        .then =>
-          @_applySetters(resourceByModelId, models, context)
-          savePromises = []
-          models.forEach (model) =>
-            d = q.defer()
-            modelId = model._id
-            return res.send 400, '_id required to update' if not modelId
-            @Model.findByIdAndUpdate(modelId, model, {upsert: true}).lean().exec (err, model) =>
-              return res.send 400, err if err
-              d.resolve(model)
-            savePromises.push d.promise
+  _putOne: (paramId) ->
+    (req, res, next) =>
+      context = {req, res, next}
+      return if not @_isValid(req.query, context)
+      return if not @_isValid(req.body, context)
+      resource = req.body
 
-          q.all(savePromises).then (updatedModels) =>
-            @_sendResources(updatedModels, context)
+      idValue = req.params[paramId]
+      query = {}
+      query[paramId] = idValue
+
+      model = @_createModelFromResource resource
+      try
+        model._id ?= new mongoose.Types.ObjectId(idValue)
+      catch
+        model._id ?= new mongoose.Types.ObjectId()
+
+      resourceByModelId = {}
+      resourceByModelId[model._id.toString()] = resource
+
+      @_applyResolvers(context, [resource], [model])
+      .then =>
+        @_applySetters(resourceByModelId, [model], context)
+        @Model.findOneAndUpdate(query, model, {upsert: true}).lean().exec (err, model) =>
+          return res.send 400, err if err
+          return res.send 404, 'resource not found' if !model
+          res.status(200)
+          @_sendResource(model, context)
+
+  _putMany: (req, res, next) =>
+    context = {req, res, next}
+    return if not @_isValid(req.query, context)
+    return if not @_isValid(req.body, context)
+    resources = req.body
+    for resource in resources
+      return if not @_isValid(resource, context)
+    resourceByModelId = {}
+    models = resources.map (resource) =>
+      @_convertTypes(resource, context)
+      model = @_createModelFromResource(resource)
+      resourceByModelId[model._id.toString()] = resource
+      model
+
+    @_applyResolvers(context, resources, models)
+    .then =>
+      @_applySetters(resourceByModelId, models, context)
+      savePromises = []
+      models.forEach (model) =>
+        d = q.defer()
+        modelId = model._id
+        return res.send 400, '_id required to update' if not modelId
+        @Model.findByIdAndUpdate(modelId, model, {upsert: true}).lean().exec (err, model) =>
+          return res.send 400, err if err
+          d.resolve(model)
+        savePromises.push d.promise
+
+      q.all(savePromises).then (updatedModels) =>
+        @_sendResources(updatedModels, context)
 
   ###
   Generate middleware to handle DELETE requests for resource
