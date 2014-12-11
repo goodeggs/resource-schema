@@ -1,3 +1,4 @@
+{suite, given} = require '../support/helpers'
 sinon = require 'sinon'
 fibrous = require 'fibrous'
 mongoose = require 'mongoose'
@@ -7,22 +8,39 @@ expect = require('chai').expect
 request = require 'request'
 require '../support/bootstrap'
 
-MongooseResource = require '../..'
+ResourceSchema = require '../..'
 
 {response, model} = {}
 
-describe 'GET many', ->
-  describe 'no search fields', ->
-    before fibrous ->
-      Model.sync.remove()
-      @model = Model.sync.create name: 'test'
-      response = request.sync.get
-        url: 'http://127.0.0.1:4000/resource',
-        json: true
+suite 'GET many', ({withModel, withServer}) ->
+  describe 'with a simple resource', ->
+    withModel (mongoose) ->
+      mongoose.Schema name: String
 
-    it 'returns an array of objects', ->
-      expect(response.body.length).to.equal 1
-      expect(response.body[0].name).to.equal 'test'
+    beforeEach ->
+      @resource = new ResourceSchema @model
+
+    withServer (app) ->
+      app.get '/res/', @resource.get(), @resource.send
+      app
+
+    it 'returns all of the objects', fibrous ->
+      [0...10].forEach (i) => @model.sync.create name: "model_#{i}"
+      response = @request.sync.get '/res/'
+      expect(response.body.length).to.equal 10
+      expect(response.body[0].name).to.equal 'model_0'
+
+    it 'filters by a param', fibrous ->
+      [0...10].forEach => @model.sync.create name: 'one'
+      [0...10].forEach => @model.sync.create name: 'two'
+      response = @request.sync.get '/res?name=one'
+      expect(response.body.length).to.equal 10
+      expect(response.body[0].name).to.equal 'one'
+
+    it 'returns 400 if the supplied param is invalid', fibrous ->
+      response = @request.sync.get '/res?_id=badId'
+      expect(response.statusCode).to.equal 400
+      expect(response.body).to.equal ''
 
   describe 'optional: [Boolean]', ->
     before fibrous ->
@@ -85,22 +103,6 @@ describe 'GET many', ->
       expect(response.body.length).to.equal 2
       expect(response.body[0].product.price).to.equal 15
       expect(response.body[1].product.price).to.equal 20
-
-  describe 'search fields', ->
-    describe 'single search field', ->
-      before fibrous ->
-        Model.sync.remove()
-        targetId = new mongoose.Types.ObjectId()
-        Model.sync.create name: 'test1'
-        Model.sync.create name: 'test2'
-
-        response = request.sync.get
-          url: 'http://127.0.0.1:4000/resource?name=test1',
-          json: true
-
-      it 'filters by the param', ->
-        expect(response.body.length).to.equal 1
-        expect(response.body[0].name).to.equal 'test1'
 
   describe 'falsy value in model', ->
     describe 'single search field', ->

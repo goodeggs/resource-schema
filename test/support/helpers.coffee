@@ -1,4 +1,5 @@
 mongoose = require 'mongoose'
+express = require 'express'
 url = require 'url'
 namespacedRequest = require 'namespaced-request'
 
@@ -15,7 +16,7 @@ suiteHelpers =
 
     beforeEach (done) ->
       @mongooseConnection ?= mongoose.createConnection 'mongodb://localhost/test'
-      schema = schemaFn.call @
+      schema = schemaFn.call @, mongoose
       model = @mongooseConnection.model name, schema
       @models ?= {}
       @models[name] = model
@@ -29,7 +30,10 @@ suiteHelpers =
 
   withServer: (appFn) ->
     beforeEach (done) ->
-      app = appFn.call @
+      app = appFn.call @, express()
+      app.use (err, req, res, next) -> # add standard error-catching middleware
+        res.status err.status or 500
+        res.send err.message
       @server = app.listen port, done
       @request = namespacedRequest "http://127.0.0.1:#{port}"
 
