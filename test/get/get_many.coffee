@@ -40,7 +40,7 @@ suite 'GET many', ({withModel, withServer}) ->
     it 'returns 400 if the supplied param is invalid', fibrous ->
       response = @request.sync.get '/res?_id=badId'
       expect(response.statusCode).to.equal 400
-      expect(response.body).to.equal ''
+      expect(response.body).to.equal "'badId' is an invalid ObjectId for field '_id'"
 
   describe 'optional: [Boolean]', ->
     before fibrous ->

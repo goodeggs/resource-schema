@@ -26,10 +26,11 @@ module.exports = class ResourceSchema
 
   _getMany: (req, res, next) =>
     context = {req, res, next}
-    return if not @_isValid(req.query, context)
+    return if not @_enforceValidity(req.query, context)
 
     @_getMongoQuery(req.query, context)
     .then (mongoQuery) =>
+      return if not @_enforceValidity(mongoQuery, context)
       # normal (non aggregate) resource
       if not @options.groupBy
         modelQuery = @Model.find(mongoQuery)
@@ -51,7 +52,7 @@ module.exports = class ResourceSchema
   _getOne: (paramId) =>
     (req, res, next) =>
       context = {req, res, next}
-      return if not @_isValid(req.query, context)
+      return if not @_enforceValidity(req.query, context)
 
       select = @_getModelSelectFields req.query
 
@@ -75,7 +76,7 @@ module.exports = class ResourceSchema
   ###
   post: ->
     (req, res, next) =>
-      return if not @_isValid(req.query, context)
+      return if not @_enforceValidity(req.query, context)
 
       if Array.isArray req.body
         @_postMany(req, res, next)
@@ -85,7 +86,7 @@ module.exports = class ResourceSchema
   _postOne: (req, res, next) ->
     context = {req, res, next}
     resource = req.body
-    return if not @_isValid(resource, context)
+    return if not @_enforceValidity(resource, context)
     model = @_createModelFromResource resource
     resourceByModelId = {}
     resourceByModelId[model._id.toString()] = resource
@@ -101,7 +102,7 @@ module.exports = class ResourceSchema
     context = {req, res, next}
     resources = req.body
     for resource in resources
-      return if not @_isValid(resource, context)
+      return if not @_enforceValidity(resource, context)
     resourceByModelId = {}
     models = resources.map (resource) =>
       model = @_createModelFromResource(resource)
@@ -126,8 +127,8 @@ module.exports = class ResourceSchema
   _putOne: (paramId) ->
     (req, res, next) =>
       context = {req, res, next}
-      return if not @_isValid(req.query, context)
-      return if not @_isValid(req.body, context)
+      return if not @_enforceValidity(req.query, context)
+      return if not @_enforceValidity(req.body, context)
       resource = req.body
 
       idValue = req.params[paramId]
@@ -150,11 +151,11 @@ module.exports = class ResourceSchema
 
   _putMany: (req, res, next) =>
     context = {req, res, next}
-    return if not @_isValid(req.query, context)
-    return if not @_isValid(req.body, context)
+    return if not @_enforceValidity(req.query, context)
+    return if not @_enforceValidity(req.body, context)
     resources = req.body
     for resource in resources
-      return if not @_isValid(resource, context)
+      return if not @_enforceValidity(resource, context)
     resourceByModelId = {}
     models = resources.map (resource) =>
       model = @_createModelFromResource(resource)
@@ -182,7 +183,7 @@ module.exports = class ResourceSchema
   delete: (paramId) ->
     (req, res, next) =>
       context = {req, res, next}
-      return if not @_isValid(req.query, context)
+      return if not @_enforceValidity(req.query, context)
 
       idValue = req.params[paramId]
       query = {}
@@ -446,8 +447,17 @@ module.exports = class ResourceSchema
     schemaKeys.splice schemaKeys.indexOf('__v'), 1
     schema = {}
     for schemaKey in schemaKeys
+      instance = Model.schema.paths[schemaKey].instance
+      type = switch instance
+        when 'Buffer' then mongoose.Types.Buffer
+        when 'Boolean' then Boolean
+        when 'Date' then Date
+        when 'Number' then Number
+        when 'ObjectID' then mongoose.Types.ObjectId
+        when 'String' then String
       schema[schemaKey] =
         field: schemaKey
+        type: type
 
     _(schema).extend(@_normalizeQueryParams())
 
@@ -500,9 +510,9 @@ module.exports = class ResourceSchema
     normalizedParams
 
   ###
-  Check validity of object with validate and match on schema
+  Enforce validity of object with validate and match on schema
   ###
-  _isValid: (obj, {req, res, next}) ->
+  _enforceValidity: (obj, {req, res, next}) ->
     validateValue = (key, value, res) =>
       if @schema[key]?.validate
         if not @schema[key].validate(value)
@@ -535,7 +545,9 @@ module.exports = class ResourceSchema
   ###
   _convertTypes: (obj, {req, res, next}) ->
     send400 = (type, key, value) =>
-      return res.status(400).send("'#{value}' is an invalid Date for field '#{key}'")
+      error = new Error("'#{value}' is an invalid #{type} for field '#{key}'")
+      error.status = 400
+      return next(error)
 
     convert = (key, value) =>
       switch @schema[key].type
@@ -556,13 +568,19 @@ module.exports = class ResourceSchema
           date = new Date(value)
           send400('Date', key, value) if isNaN(date.getTime())
           return date
-        # mongoose.Types.ObjectId, etc.
+        when mongoose.Types.ObjectId
+          try
+            return new mongoose.Types.ObjectId(value)
+          catch
+            send400('ObjectId', key, value)
+        # other stuff
         else
           try
             newValue = new @schema[key].type(value)
             return newValue
           catch e
-            res.status(400).send e.toString()
+            e.status ?= 500
+            return next(e)
 
     for key, value of obj
       continue if not @schema[key]?.type?
