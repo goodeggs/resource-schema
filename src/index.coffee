@@ -63,8 +63,11 @@ module.exports = class ResourceSchema
       modelQuery.select(select) if select?
       modelQuery.lean()
       modelQuery.exec (err, model) =>
-        return res.status(400).send(err) if err
-        return res.status(404).send("No #{paramId} found with id #{idValue}") if not model?
+        err.status = 400 if err
+        unless err or model?
+          err = new Error "No resources found with #{paramId} of #{idValue}"
+          err.status = 404
+        return next(err) if err
         @_sendResource(model, context)
 
   ###

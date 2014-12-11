@@ -41,3 +41,7 @@ class module.exports.suite extends GLOBAL.describe
   constructor: (name, callback) ->
     super name, ->
       callback suiteHelpers
+
+class module.exports.given extends GLOBAL.describe
+  constructor: (name, callback) ->
+    super "given #{name}", callback
