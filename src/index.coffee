@@ -3,6 +3,7 @@ _ = require 'underscore'
 q = require 'q'
 clone = require 'clone'
 deepExtend = require './deep_extend'
+mongoose = require 'mongoose'
 
 RESERVED_KEYWORDS = require './reserved_keywords'
 
@@ -80,12 +81,16 @@ module.exports = class ResourceSchema
         resources = req.body
         for resource in resources
           return if not @_isValid(resource, context)
+        resourceByModelId = {}
         models = resources.map (resource) =>
           @_convertTypes(resource, context)
-          @_createModelFromResource(resource)
+          model = @_createModelFromResource(resource)
+          model._id = new mongoose.Types.ObjectId()
+          resourceByModelId[model._id.toString()] = resource
+          model
         @_applyResolvers(context, resources, models)
         .then =>
-          @_applySetters(resources, models, context)
+          @_applySetters(resourceByModelId, models, context)
           @Model.create models, (err, modelsSaved...) =>
             return res.status(400).send(err) if err
             res.status(201)
@@ -97,11 +102,14 @@ module.exports = class ResourceSchema
         return if not @_isValid(resource, context)
         # TODO: is this necessary here? Mongoose will catch type problems...
         @_convertTypes(resource, context)
-        newModelData = @_createModelFromResource resource
-        @_applyResolvers(context, [resource], [newModelData])
+        model = @_createModelFromResource resource
+        model._id = new mongoose.Types.ObjectId()
+        resourceByModelId = {}
+        resourceByModelId[model._id.toString()] = resource
+        @_applyResolvers(context, [resource], [model])
         .then =>
-          @_applySetters([resource], [newModelData], context)
-          model = new @Model(newModelData)
+          @_applySetters(resourceByModelId, [model], context)
+          model = new @Model(model)
           model.save (err, modelSaved) =>
             return res.status(400).send(err) if err
             res.status(201)
@@ -118,15 +126,24 @@ module.exports = class ResourceSchema
         return if not @_isValid(req.query, context)
         return if not @_isValid(req.body, context)
         resource = req.body
-        newModelData = @_createModelFromResource resource
 
         idValue = req.params[paramId]
         query = {}
         query[paramId] = idValue
-        @_applyResolvers(context, [resource], [newModelData])
+
+        model = @_createModelFromResource resource
+        try
+          model._id ?= new mongoose.Types.ObjectId(idValue)
+        catch
+          model._id ?= new mongoose.Types.ObjectId()
+
+        resourceByModelId = {}
+        resourceByModelId[model._id.toString()] = resource
+
+        @_applyResolvers(context, [resource], [model])
         .then =>
-          @_applySetters([resource], [newModelData], context)
-          @Model.findOneAndUpdate(query, newModelData, {upsert: true}).lean().exec (err, model) =>
+          @_applySetters(resourceByModelId, [model], context)
+          @Model.findOneAndUpdate(query, model, {upsert: true}).lean().exec (err, model) =>
             return res.send 400, err if err
             return res.send 404, 'resource not found' if !model
             res.status(200)
@@ -141,13 +158,16 @@ module.exports = class ResourceSchema
         resources = req.body
         for resource in resources
           return if not @_isValid(resource, context)
+        resourceByModelId = {}
         models = resources.map (resource) =>
           @_convertTypes(resource, context)
-          @_createModelFromResource(resource)
+          model = @_createModelFromResource(resource)
+          resourceByModelId[model._id.toString()] = resource
+          model
 
         @_applyResolvers(context, resources, models)
         .then =>
-          @_applySetters(resources, models, context)
+          @_applySetters(resourceByModelId, models, context)
           savePromises = []
           models.forEach (model) =>
             d = q.defer()
@@ -238,10 +258,7 @@ module.exports = class ResourceSchema
 
     #set _id for aggregate resources
     if @options.groupBy?.length
-      delete model._id
-      aggregateValues = @options.groupBy.map (aggregateField) ->
-        dot.get model, aggregateField
-      resource._id = aggregateValues.join('|')
+      resource._id = model._id
 
     #set all other fields
     for resourceField, config of @schema
@@ -258,24 +275,25 @@ module.exports = class ResourceSchema
   ###
   Wait for all set queries to update models
   ###
-  _applySetters: (resources, models, context) =>
+  _applySetters: (resourceByModelId, models, context) =>
     {req, res, next} = context
-    for resourceField, config of @schema
-      continue if typeof config.set isnt 'function'
-      models.forEach (model) =>
-        model[@schema[resourceField].field] = config.set(model, context)
+    models.forEach (model) =>
+      for resourceField, config of @schema
+        continue if typeof config.set isnt 'function'
+        model[@schema[resourceField].field] = config.set(resourceByModelId[model._id], context)
 
   ###
   Wait for all get queries to update resources
   ###
-  _applyGetters: (resources, context) =>
+  _applyGetters: (resourceByModelId, models, context) =>
     {req, res, next, models} = context
-    resourceFields = @_getResourceFields(req.query)
-    for resourceField, config of @schema
-      continue if resourceField not in resourceFields
-      continue if typeof config.get isnt 'function'
-      resources.forEach (resource) ->
-        resource[resourceField] = config.get(resource, context)
+    selectedResourceFields = @_getSelectedResourceFields(req.query)
+    for model in models
+      resource = resourceByModelId[model._id.toString()]
+      for resourceField, config of @schema
+        continue if resourceField not in selectedResourceFields
+        continue if typeof config.get isnt 'function'
+        resource[resourceField] = config.get(model, context)
 
   ###
   Get $group config used for aggregating the model
@@ -310,7 +328,7 @@ module.exports = class ResourceSchema
   @param [Object] query - query params from client
   @return [Array] resource fields
   ###
-  _getResourceFields: (query) =>
+  _getSelectedResourceFields: (query) =>
     [resourceFields] = @_getResourceAndModelFields()
     select = query.$select
 
@@ -562,8 +580,7 @@ module.exports = class ResourceSchema
     resources
 
   ###
-  Execute all resolves that are needed for getting and setting properties,
-  and add those resolved values to the context.
+  Apply all resolvers. Data will be added to context, and can be used inside getters and setters.
   ###
   _applyResolvers: (context, resources, models) ->
     {req, res, next} = context
@@ -571,13 +588,14 @@ module.exports = class ResourceSchema
     resolvePromises = []
     context.resources = resources
     context.models = models
-    selectedResourceFields = @_getResourceFields(req.query)
+    selectedResourceFields = @_getSelectedResourceFields(req.query)
 
     for resourceField, config of @schema
       continue if resourceField not in selectedResourceFields
       continue if typeof config.resolve isnt 'object'
 
       for resolveVar, resolveMethod of config.resolve
+        continue if typeof resolveMethod isnt 'function'
         continue if context[resolveVar]
         do =>
           d = q.defer()
@@ -592,18 +610,28 @@ module.exports = class ResourceSchema
   _sendResource: (model, context) ->
     {req, res, next} = context
     resource = @_createResourceFromModel(model, req.query.$select)
+    resourceByModelId = {}
+    resourceByModelId[model._id.toString()] = resource
     @_applyResolvers(context, [resource], [model])
     .then =>
-      @_applyGetters([resource], context)
+      @_applyGetters(resourceByModelId, [model], context)
       res.body = resource
       next()
 
   _sendResources: (models, context) ->
     {req, res, next} = context
-    resources = models.map (model) => @_createResourceFromModel(model, req.query.$select)
+
+    resourceByModelId = {}
+    resources = models.map (model) =>
+      if model._id not instanceof mongoose.Types.ObjectId and typeof model._id is 'object'
+        model._id = _(model._id).values().join('|')
+      resource = @_createResourceFromModel(model, req.query.$select)
+      resourceByModelId[model._id.toString()] = resource
+      resource
+
     @_applyResolvers(context, resources, models)
     .then =>
-      @_applyGetters(resources, context)
+      @_applyGetters(resourceByModelId, models, context)
       @_applyFilters(resources, context)
     .then (resources) =>
       res.body = resources

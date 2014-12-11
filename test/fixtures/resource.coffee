@@ -11,7 +11,7 @@ schema = {
 
   'name':
     field: 'name'
-    set: (model) -> model.name.toLowerCase()
+    set: (resource) -> resource.name.toLowerCase()
 
   'active'
 
@@ -36,8 +36,8 @@ schema = {
         done null, { _id: $in: parentModel.modelIds }
     resolve:
       parentModelsByChildId: ({models}, done) -> getParentModelsByChildId(models, done)
-    get: (resource, {parentModelsByChildId}) ->
-      parentModelsByChildId[resource._id]?.name
+    get: (model, {parentModelsByChildId}) ->
+      parentModelsByChildId[model._id]?.name
 
   # TODO: remove, this is no longer helpful
   'secondGet':

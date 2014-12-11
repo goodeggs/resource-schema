@@ -13,7 +13,7 @@ MongooseResource = require '..'
 
 describe 'aggregate resource', ->
 
-  describe '.index()', ->
+  describe '.get()', ->
     describe 'no search fields', ->
       before fibrous ->
         Model.sync.remove()

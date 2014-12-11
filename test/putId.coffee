@@ -86,7 +86,7 @@ describe '.put(id)', ->
         key: 'bar'
         name: 'test2'
 
-    it 'creates the resource in teh database', fibrous ->
+    it 'creates the resource in the database', fibrous ->
       modelFound = ModelCustomKey.sync.findOne(key: 'bar')
       expect(ModelCustomKey.sync.count()).to.equal 2
       expect(modelFound.name).to.equal 'test2'
