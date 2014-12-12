@@ -29,10 +29,8 @@ module.exports = class ResourceSchema
     context = {req, res, next}
     return if not @_enforceValidity(req.query, context)
 
-    query = @_getMongoQuery(req.query, context)
-    query.catch (err) ->
-      return next Boom.wrap(err)
-    query.then (mongoQuery) =>
+    @_getMongoQuery(req.query, context).then (mongoQuery) =>
+      d = q.defer()
       # normal (non aggregate) resource
       if not @options.groupBy
         modelQuery = @Model.find(mongoQuery)
@@ -47,9 +45,12 @@ module.exports = class ResourceSchema
 
       limit = @_getLimit req.query
       modelQuery.limit(limit) if limit
-      modelQuery.exec (err, models) =>
-        return next Boom.wrap(err) if err
-        @_sendResources(models, context)
+      modelQuery.exec(d.makeNodeResolver())
+      d.promise
+    .then (models) =>
+      @_sendResources(models, context)
+    .catch (err) =>
+      next Boom.wrap(err)
 
   _getOne: (paramId) =>
     (req, res, next) =>
@@ -94,16 +95,15 @@ module.exports = class ResourceSchema
     resourceByModelId = {}
     resourceByModelId[model._id.toString()] = resource
 
-    builtContext = @_buildContext(context, [resource], [model])
-    builtContext.catch (err) =>
-      return next Boom.wrap(err)
-    builtContext.then =>
+    @_buildContext(context, [resource], [model]).then =>
       @_applySetters(resourceByModelId, [model], context)
       model = new @Model(model)
-      model.save (err, modelSaved) =>
-        return next Boom.wrap(err) if err
-        res.status(201)
-        @_sendResource(model, context)
+      model.save()
+    .then (modelSaved) =>
+      res.status(201)
+      @_sendResource(model, context)
+    .catch (err) ->
+      next Boom.wrap(err)
 
   _postMany: (req, res, next) ->
     context = {req, res, next}
@@ -116,15 +116,19 @@ module.exports = class ResourceSchema
       resourceByModelId[model._id.toString()] = resource
       model
 
-    builtContext = @_buildContext(context, resources, models)
-    builtContext.catch (err) =>
-      return next Boom.wrap(err)
-    builtContext.then =>
+    @_buildContext(context, resources, models).then =>
+      d = q.defer()
       @_applySetters(resourceByModelId, models, context)
-      @Model.create models, (err, modelsSaved...) =>
-        return next Boom.wrap(err) if err
-        res.status(201)
-        @_sendResources(modelsSaved, context)
+      # use node resolver b/c q does not pass splat arguments
+      @Model.create models, (err, modelsSaved...) ->
+        d.reject(Boom.wrap err) if err
+        d.resolve(modelsSaved)
+      d.promise
+    .then (modelsSaved) =>
+      res.status(201)
+      @_sendResources(modelsSaved, context)
+    .catch (err) =>
+      next Boom.wrap(err)
 
   ###
   Generate middleware to handle PUT requests for resource
@@ -152,17 +156,18 @@ module.exports = class ResourceSchema
       resourceByModelId = {}
       resourceByModelId[model._id.toString()] = resource
 
-      builtContext = @_buildContext(context, [resource], [model])
-      builtContext.catch (err) =>
-        return next Boom.wrap(err)
-      builtContext.then =>
+      @_buildContext(context, [resource], [model]).then =>
+        d = q.defer()
         @_applySetters(resourceByModelId, [model], context)
         delete model._id
-        @Model.findOneAndUpdate(query, model, {upsert: true}).lean().exec (err, model) =>
-          return next Boom.wrap(err) if err
-          return next Boom.notFound() if not model?
-          res.status(200)
-          @_sendResource(model, context)
+        @Model.findOneAndUpdate(query, model, {upsert: true}).lean().exec(d.makeNodeResolver())
+        d.promise
+      .then (model) =>
+        return next Boom.notFound() if not model?
+        res.status(200)
+        @_sendResource(model, context)
+      .catch (err) =>
+        next Boom.wrap(err)
 
   _putMany: (req, res, next) =>
     context = {req, res, next}
@@ -177,30 +182,20 @@ module.exports = class ResourceSchema
       resourceByModelId[model._id.toString()] = resource
       model
 
-    builtContext = @_buildContext(context, resources, models)
-    builtContext.catch (err) ->
-      return next Boom.wrap err
-    builtContext.then =>
+    @_buildContext(context, resources, models).then =>
       @_applySetters(resourceByModelId, models, context)
       savePromises = models.map (model) =>
         d = q.defer()
         modelId = model._id
-        if not modelId
-          d.reject Boom.badRequest('_id required to update')
-          return d.promise
+        throw Boom.badRequest('_id required to update') if not modelId
         delete model._id
-        # TODO doesn't mongoose return a promise from exec()?
-        # it seems like we might not need to build up our own deferred() object here.
-        @Model.findByIdAndUpdate(modelId, model, {upsert: true}).lean().exec (err, model) =>
-          return d.reject(Boom.wrap err) if err
-          d.resolve(model)
+        @Model.findByIdAndUpdate(modelId, model, {upsert: true}).lean().exec(d.makeNodeResolver())
         d.promise
-
-      saved = q.all(savePromises)
-      saved.then (updatedModels) =>
-        @_sendResources(updatedModels, context)
-      saved.catch (err) ->
-        return next Boom.wrap(err)
+      q.all(savePromises)
+    .then (updatedModels) =>
+      @_sendResources(updatedModels, context)
+    .catch (err) ->
+      next Boom.wrap(err)
 
   ###
   Generate middleware to handle DELETE requests for resource
@@ -214,10 +209,9 @@ module.exports = class ResourceSchema
       query = {}
       query[paramId] = idValue
 
-      @Model.findOneAndRemove query, (err, removedInstance) =>
+      @Model.findOneAndRemove(query).exec (err, removedInstance) =>
         return next Boom.wrap(err) if err
         return next Boom.notFound("Resource with id #{idValue} not found from #{@Model.modelName} collection") if not removedInstance?
-
         res.status(204)
         res.body = "Resource with id #{idValue} successfully deleted from #{@Model.modelName} collection"
         next()
