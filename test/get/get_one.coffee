@@ -33,12 +33,18 @@ suite 'GET one', ({withModel, withServer}) ->
         id = new mongoose.Types.ObjectId()
         response = @request.sync.get "/res/#{id}"
         expect(response.statusCode).to.equal 404
-        expect(response.body).to.equal "No resources found with _id of #{id}"
+        expect(response.body).to.deep.equal
+          statusCode: 404
+          error: 'Not Found'
+          message: "No resources found with _id of #{id}"
 
       it 'returns 400 if objectId not valid', fibrous ->
         response = @request.sync.get "/res/badId"
         expect(response.statusCode).to.equal 400
-        expect(response.body).to.equal "Cast to ObjectId failed for value \"badId\" at path \"_id\""
+        expect(response.body).to.deep.equal
+          statusCode: 400
+          error: 'Bad Request'
+          message: "'badId' is an invalid ObjectId for field '_id'"
 
       it 'returns 500 if there are issues querying the database', fibrous ->
         sinon.stub(@model, 'findOne').throws()

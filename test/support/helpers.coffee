@@ -2,6 +2,7 @@ mongoose = require 'mongoose'
 express = require 'express'
 url = require 'url'
 namespacedRequest = require 'namespaced-request'
+Boom = require 'boom'
 
 port = process.env.PORT || 93280
 
@@ -32,8 +33,9 @@ suiteHelpers =
     beforeEach (done) ->
       app = appFn.call @, express()
       app.use (err, req, res, next) -> # add standard error-catching middleware
-        res.status err.status or 500
-        res.send err.message
+        throw err unless err.isBoom
+        res.status err.output.statusCode
+        res.send err.output.payload
       @server = app.listen port, done
       @request = namespacedRequest "http://127.0.0.1:#{port}"
 

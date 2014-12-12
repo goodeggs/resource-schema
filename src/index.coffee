@@ -4,6 +4,7 @@ q = require 'q'
 clone = require 'clone'
 deepExtend = require './deep_extend'
 mongoose = require 'mongoose'
+Boom = require 'boom'
 
 RESERVED_KEYWORDS = require './reserved_keywords'
 
@@ -28,9 +29,10 @@ module.exports = class ResourceSchema
     context = {req, res, next}
     return if not @_enforceValidity(req.query, context)
 
-    @_getMongoQuery(req.query, context)
-    .then (mongoQuery) =>
-      return if not @_enforceValidity(mongoQuery, context)
+    query = @_getMongoQuery(req.query, context)
+    query.catch (err) ->
+      return next Boom.wrap(err)
+    query.then (mongoQuery) =>
       # normal (non aggregate) resource
       if not @options.groupBy
         modelQuery = @Model.find(mongoQuery)
@@ -46,7 +48,7 @@ module.exports = class ResourceSchema
       limit = @_getLimit req.query
       modelQuery.limit(limit) if limit
       modelQuery.exec (err, models) =>
-        if err then return next err
+        return next Boom.wrap(err) if err
         @_sendResources(models, context)
 
   _getOne: (paramId) =>
@@ -59,16 +61,17 @@ module.exports = class ResourceSchema
       idValue = req.params[paramId]
       query = {}
       query[paramId] = idValue
+      try
+        query = @_convertTypes(query)
+      catch err
+        return next Boom.wrap err
 
       modelQuery = @Model.findOne(query)
       modelQuery.select(select) if select?
       modelQuery.lean()
       modelQuery.exec (err, model) =>
-        err.status = 400 if err
-        unless err or model?
-          err = new Error "No resources found with #{paramId} of #{idValue}"
-          err.status = 404
-        return next(err) if err
+        return next Boom.wrap(err) if err
+        return next Boom.notFound("No resources found with #{paramId} of #{idValue}") if not model?
         @_sendResource(model, context)
 
   ###
@@ -90,11 +93,15 @@ module.exports = class ResourceSchema
     model = @_createModelFromResource resource
     resourceByModelId = {}
     resourceByModelId[model._id.toString()] = resource
-    @_buildContext(context, [resource], [model]).then =>
+
+    builtContext = @_buildContext(context, [resource], [model])
+    builtContext.catch (err) =>
+      return next Boom.wrap(err)
+    builtContext.then =>
       @_applySetters(resourceByModelId, [model], context)
       model = new @Model(model)
       model.save (err, modelSaved) =>
-        return res.status(400).send(err) if err
+        return next Boom.wrap(err) if err
         res.status(201)
         @_sendResource(model, context)
 
@@ -108,10 +115,14 @@ module.exports = class ResourceSchema
       model = @_createModelFromResource(resource)
       resourceByModelId[model._id.toString()] = resource
       model
-    @_buildContext(context, resources, models).then =>
+
+    builtContext = @_buildContext(context, resources, models)
+    builtContext.catch (err) =>
+      return next Boom.wrap(err)
+    builtContext.then =>
       @_applySetters(resourceByModelId, models, context)
       @Model.create models, (err, modelsSaved...) =>
-        return res.status(400).send(err) if err
+        return next Boom.wrap(err) if err
         res.status(201)
         @_sendResources(modelsSaved, context)
 
@@ -141,11 +152,14 @@ module.exports = class ResourceSchema
       resourceByModelId = {}
       resourceByModelId[model._id.toString()] = resource
 
-      @_buildContext(context, [resource], [model]).then =>
+      builtContext = @_buildContext(context, [resource], [model])
+      builtContext.catch (err) =>
+        return next Boom.wrap(err)
+      builtContext.then =>
         @_applySetters(resourceByModelId, [model], context)
         @Model.findOneAndUpdate(query, model, {upsert: true}).lean().exec (err, model) =>
-          return res.send 400, err if err
-          return res.send 404, 'resource not found' if !model
+          return next Boom.wrap(err) if err
+          return next Boom.notFound() if not model?
           res.status(200)
           @_sendResource(model, context)
 
@@ -162,20 +176,31 @@ module.exports = class ResourceSchema
       resourceByModelId[model._id.toString()] = resource
       model
 
-    @_buildContext(context, resources, models).then =>
+    builtContext = @_buildContext(context, resources, models)
+    builtContext.catch (err) ->
+      return next Boom.wrap err
+    builtContext.then =>
       @_applySetters(resourceByModelId, models, context)
-      savePromises = []
-      models.forEach (model) =>
+      savePromises = models.map (model) =>
         d = q.defer()
         modelId = model._id
-        return res.send 400, '_id required to update' if not modelId
-        @Model.findByIdAndUpdate(modelId, model, {upsert: true}).lean().exec (err, model) =>
-          return res.send 400, err if err
-          d.resolve(model)
-        savePromises.push d.promise
 
-      q.all(savePromises).then (updatedModels) =>
+        if not modelId
+          d.reject Boom.badRequest('_id required to update')
+          return d.promise
+
+        # TODO doesn't mongoose return a promise from exec()?
+        # it seems like we might not need to build up our own deferred() object here.
+        @Model.findByIdAndUpdate(modelId, model, {upsert: true}).lean().exec (err, model) =>
+          return d.reject(Boom.wrap err) if err
+          d.resolve(model)
+        d.promise
+
+      saved = q.all(savePromises)
+      saved.then (updatedModels) =>
         @_sendResources(updatedModels, context)
+      saved.catch (err) ->
+        return next Boom.wrap(err)
 
   ###
   Generate middleware to handle DELETE requests for resource
@@ -190,8 +215,8 @@ module.exports = class ResourceSchema
       query[paramId] = idValue
 
       @Model.findOneAndRemove query, (err, removedInstance) =>
-        return res.status(400).send(err) if err
-        res.status(404).send("Resource with id #{idValue} not found from #{@Model.modelName} collection") if !removedInstance?
+        return next Boom.wrap(err) if err
+        return next Boom.notFound("Resource with id #{idValue} not found from #{@Model.modelName} collection") if not removedInstance?
 
         res.status(204)
         res.body = "Resource with id #{idValue} successfully deleted from #{@Model.modelName} collection"
@@ -206,20 +231,28 @@ module.exports = class ResourceSchema
 
   ###
   Build the model query from the query parameters
+  returns a promise with the query inside it
   ###
   _getMongoQuery: (requestQuery, {req, res, next}) =>
     modelQuery = clone(@options.defaultQuery) or {}
-    deferred = q.defer()
     queryPromises = []
-    resourceQuery = @_getResourceQuery requestQuery, {req, res, next}
+
+    try
+      resourceQuery = @_getResourceQuery requestQuery
+    catch err
+      deferred = q.defer()
+      deferred.reject Boom.wrap err
+      return deferred.promise
 
     for resourceField, value of resourceQuery
       # apply sync finders
       if typeof @schema[resourceField].find is 'function'
         try
           query = @schema[resourceField].find value, {req, res, next}
-        catch e
-          res.send 500, e.toString()
+        catch err
+          deferred = q.defer()
+          deferred.reject Boom.wrap err
+          return deferred.promise
         deepExtend(modelQuery, query)
 
       # apply async finders
@@ -227,7 +260,7 @@ module.exports = class ResourceSchema
         do =>
           d = q.defer()
           @schema[resourceField].findAsync value, {req, res, next}, (err, query) =>
-            return res.status(400).send (err.toString()) if err
+            return d.reject Boom.wrap err if err
             deepExtend(modelQuery, query)
             d.resolve()
           queryPromises.push(d.promise)
@@ -236,10 +269,7 @@ module.exports = class ResourceSchema
       else if @schema[resourceField].field
         modelQuery[@schema[resourceField].field] = value
 
-    q.all(queryPromises).then ->
-      deferred.resolve(modelQuery)
-
-    deferred.promise
+    q.all(queryPromises).then -> modelQuery
 
   _createModelFromResource: (resource) =>
     model = {}
@@ -275,30 +305,22 @@ module.exports = class ResourceSchema
   Wait for all setters to update models
   ###
   _applySetters: (resourceByModelId, models, context) =>
-    {req, res, next} = context
     models.forEach (model) =>
       for resourceField, config of @schema
         continue if typeof config.set isnt 'function'
-        try
-          dot.set(model, @schema[resourceField].field, config.set(resourceByModelId[model._id.toString()], context))
-        catch e
-          res.send 500, e.toString()
+        dot.set(model, @schema[resourceField].field, config.set(resourceByModelId[model._id.toString()], context))
 
   ###
   Wait for all getters to update resources
   ###
   _applyGetters: (resourceByModelId, models, context) =>
-    {req, res, next, models} = context
-    selectedResourceFields = @_getSelectedResourceFields(req.query)
+    selectedResourceFields = @_getSelectedResourceFields(context.req.query)
     for model in models
       resource = resourceByModelId[model._id.toString()]
       for resourceField, config of @schema
         continue if resourceField not in selectedResourceFields
         continue if typeof config.get isnt 'function'
-        try
-          dot.set resource, resourceField, config.get(model, context)
-        catch e
-          res.send 500, e.toString()
+        dot.set resource, resourceField, config.get(model, context)
 
   ###
   Get $group config used for aggregating the model
@@ -398,7 +420,7 @@ module.exports = class ResourceSchema
       'loaded.at': '2014-10-01'
     }
   ###
-  _getResourceQuery: (query, {req, res, next}) =>
+  _getResourceQuery: (query) =>
     query = @_convertKeysToDotStrings query
     [resourceFields, modelFields] = @_getResourceAndModelFields()
     validFields = {}
@@ -406,7 +428,7 @@ module.exports = class ResourceSchema
       if field in resourceFields
         dot.set validFields, field, value
     queryFields = @_convertKeysToDotStrings validFields
-    @_convertTypes(queryFields, {req, res, next})
+    @_convertTypes(queryFields)
     queryFields or {}
 
   ###
@@ -513,24 +535,25 @@ module.exports = class ResourceSchema
   Enforce validity of object with validate and match on schema
   ###
   _enforceValidity: (obj, {req, res, next}) ->
-    validateValue = (key, value, res) =>
+    validateValue = (key, value) =>
       if @schema[key]?.validate
         if not @schema[key].validate(value)
-          res.status(400).send("'#{key}' is invalid")
-          return false
+          throw Boom.badRequest "'#{key}' is invalid"
       if @schema[key]?.match
         if not @schema[key].match.test(value)
-          res.status(400).send("'#{key}' is invalid")
-          return false
+          throw Boom.badRequest "'#{key}' is invalid"
       true
 
     normalizedObj = @_convertKeysToDotStrings(obj)
-    for key, value of normalizedObj
-      if Array.isArray(value)
-        for v in value
-          return false if not validateValue(key, v, res)
-      else
-        return false if not validateValue(key, value, res)
+    try
+      for key, value of normalizedObj
+        if Array.isArray(value)
+          validateValue(key, v) for v in value
+        else
+          validateValue(key, value)
+    catch e
+      next e
+      return false
     true
 
   ###
@@ -542,12 +565,12 @@ module.exports = class ResourceSchema
   - Number
   - Boolean
   - mongoose.Types.ObjectId and other newable objects
+
+  @throws a Boom http exception if any of the supplied values are invalid
   ###
-  _convertTypes: (obj, {req, res, next}) ->
-    send400 = (type, key, value) =>
-      error = new Error("'#{value}' is an invalid #{type} for field '#{key}'")
-      error.status = 400
-      return next(error)
+  _convertTypes: (obj) ->
+    badRequest = (type, key, value) =>
+      Boom.badRequest "'#{value}' is an invalid #{type} for field '#{key}'"
 
     convert = (key, value) =>
       switch @schema[key].type
@@ -555,7 +578,7 @@ module.exports = class ResourceSchema
           return value
         when Number
           number = parseFloat(value)
-          send400('Number', key, value) if isNaN(number)
+          throw badRequest('Number', key, value) if isNaN(number)
           return number
         when Boolean
           if (value is 'true') or (value is true)
@@ -563,24 +586,20 @@ module.exports = class ResourceSchema
           else if (value is 'false') or (value is true)
             return false
           else
-            send400('Boolean', key, value)
+            throw badRequest('Boolean', key, value)
         when Date
           date = new Date(value)
-          send400('Date', key, value) if isNaN(date.getTime())
+          throw badRequest('Date', key, value) if isNaN(date.getTime())
           return date
         when mongoose.Types.ObjectId
           try
             return new mongoose.Types.ObjectId(value)
           catch
-            send400('ObjectId', key, value)
+            throw badRequest('ObjectId', key, value)
         # other stuff
         else
-          try
-            newValue = new @schema[key].type(value)
-            return newValue
-          catch e
-            e.status ?= 500
-            return next(e)
+          newValue = new @schema[key].type(value)
+          return newValue
 
     for key, value of obj
       continue if not @schema[key]?.type?
@@ -595,7 +614,7 @@ module.exports = class ResourceSchema
   Filter down resources with all filter queryParams
   ###
   _applyFilters: (resources, {req, res, next, models}) ->
-    resourceQuery = @_getResourceQuery req.query, {req, res, next}
+    resourceQuery = @_getResourceQuery req.query
     for resourceField, value of resourceQuery
       if typeof @schema[resourceField].filter is 'function'
         resources = @schema[resourceField].filter value, resources, {req, res, next, models}
@@ -603,6 +622,7 @@ module.exports = class ResourceSchema
 
   ###
   Apply all resolvers. Data will be added to context, and can be used inside getters and setters.
+  @returns a promise containing context
   ###
   _buildContext: (context, resources, models) ->
     {req, res, next} = context
@@ -618,9 +638,11 @@ module.exports = class ResourceSchema
       do (resolveVar, resolveMethod) =>
         d = q.defer()
         resolveMethod context, (err, result) ->
-          res.send 500, err.toString() if err
-          context[resolveVar] = result
-          d.resolve()
+          if err
+            d.reject Boom.wrap(err)
+          else
+            context[resolveVar] = result
+            d.resolve()
 
         resolvePromises.push d.promise
 
@@ -635,23 +657,28 @@ module.exports = class ResourceSchema
         do (resolveVar, resolveMethod) =>
           d = q.defer()
           resolveMethod context, (err, result) ->
-            res.send 500, err.toString() if err
-            context[resolveVar] = result
-            d.resolve()
+            if err
+              d.reject Boom.wrap(err)
+            else
+              context[resolveVar] = result
+              d.resolve()
 
           resolvePromises.push d.promise
 
-    q.all(resolvePromises)
+    q.all(resolvePromises).then -> context
 
   _sendResource: (model, context) ->
     {req, res, next} = context
     resource = @_createResourceFromModel(model, req.query.$select)
     resourceByModelId = {}
     resourceByModelId[model._id.toString()] = resource
-    @_buildContext(context, [resource], [model]).then =>
+    builtContext = @_buildContext(context, [resource], [model])
+    builtContext.then =>
       @_applyGetters(resourceByModelId, [model], context)
       res.body = resource
       next()
+    builtContext.catch (err) ->
+      next Boom.wrap err
 
   _sendResources: (models, context) ->
     {req, res, next} = context
@@ -664,9 +691,12 @@ module.exports = class ResourceSchema
       resourceByModelId[model._id.toString()] = resource
       resource
 
-    @_buildContext(context, resources, models).then =>
-      @_applyGetters(resourceByModelId, models, context)
-      @_applyFilters(resources, context)
-    .then (resources) =>
-      res.body = resources
-      next()
+    @_buildContext(context, resources, models)
+      .then =>
+        @_applyGetters(resourceByModelId, models, context)
+        @_applyFilters(resources, context)
+      .then (resources) =>
+        res.body = resources
+        next()
+      .catch (err) ->
+        next Boom.wrap err
