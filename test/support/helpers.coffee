@@ -1,6 +1,8 @@
 mongoose = require 'mongoose'
+express = require 'express'
 url = require 'url'
 namespacedRequest = require 'namespaced-request'
+Boom = require 'boom'
 
 port = process.env.PORT || 93280
 
@@ -15,7 +17,7 @@ suiteHelpers =
 
     beforeEach (done) ->
       @mongooseConnection ?= mongoose.createConnection 'mongodb://localhost/test'
-      schema = schemaFn.call @
+      schema = schemaFn.call @, mongoose
       model = @mongooseConnection.model name, schema
       @models ?= {}
       @models[name] = model
@@ -29,7 +31,11 @@ suiteHelpers =
 
   withServer: (appFn) ->
     beforeEach (done) ->
-      app = appFn.call @
+      app = appFn.call @, express()
+      app.use (err, req, res, next) -> # add standard error-catching middleware
+        throw err unless err.isBoom
+        res.status err.output.statusCode
+        res.send err.output.payload
       @server = app.listen port, done
       @request = namespacedRequest "http://127.0.0.1:#{port}"
 
@@ -41,3 +47,7 @@ class module.exports.suite extends GLOBAL.describe
   constructor: (name, callback) ->
     super name, ->
       callback suiteHelpers
+
+class module.exports.given extends GLOBAL.describe
+  constructor: (name, callback) ->
+    super "given #{name}", callback

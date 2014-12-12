@@ -1,28 +1,50 @@
+{suite, given} = require '../support/helpers'
 sinon = require 'sinon'
 fibrous = require 'fibrous'
 mongoose = require 'mongoose'
-Model = require './fixtures/model.coffee'
-ParentModel = require './fixtures/parent_model.coffee'
+Model = require '../fixtures/model.coffee'
+ParentModel = require '../fixtures/parent_model.coffee'
 expect = require('chai').expect
 request = require 'request'
-require './support/bootstrap'
+require '../support/bootstrap'
 
-MongooseResource = require '..'
+ResourceSchema = require '../..'
 
 {response, model} = {}
 
-describe 'GET many', ->
-  describe 'no search fields', ->
-    before fibrous ->
-      Model.sync.remove()
-      @model = Model.sync.create name: 'test'
-      response = request.sync.get
-        url: 'http://127.0.0.1:4000/resource',
-        json: true
+suite 'GET many', ({withModel, withServer}) ->
+  describe 'with a simple resource', ->
+    withModel (mongoose) ->
+      mongoose.Schema name: String
 
-    it 'returns an array of objects', ->
-      expect(response.body.length).to.equal 1
-      expect(response.body[0].name).to.equal 'test'
+    beforeEach ->
+      @resource = new ResourceSchema @model
+
+    withServer (app) ->
+      app.get '/res/', @resource.get(), @resource.send
+      app
+
+    it 'returns all of the objects', fibrous ->
+      [0...10].forEach (i) => @model.sync.create name: "model_#{i}"
+      response = @request.sync.get '/res/'
+      expect(response.body.length).to.equal 10
+      expect(response.body[0].name).to.equal 'model_0'
+
+    it 'filters by a param', fibrous ->
+      [0...10].forEach => @model.sync.create name: 'one'
+      [0...10].forEach => @model.sync.create name: 'two'
+      response = @request.sync.get '/res?name=one'
+      expect(response.body.length).to.equal 10
+      expect(response.body[0].name).to.equal 'one'
+
+    it 'returns 400 if the supplied param is invalid', fibrous ->
+      response = @request.sync.get '/res?_id=badId'
+      expect(response.statusCode).to.equal 400
+      expect(response.body).to.deep.equal
+        statusCode: 400
+        error: 'Bad Request'
+        message: "'badId' is an invalid ObjectId for field '_id'"
+
 
   describe 'optional: [Boolean]', ->
     before fibrous ->
@@ -85,22 +107,6 @@ describe 'GET many', ->
       expect(response.body.length).to.equal 2
       expect(response.body[0].product.price).to.equal 15
       expect(response.body[1].product.price).to.equal 20
-
-  describe 'search fields', ->
-    describe 'single search field', ->
-      before fibrous ->
-        Model.sync.remove()
-        targetId = new mongoose.Types.ObjectId()
-        Model.sync.create name: 'test1'
-        Model.sync.create name: 'test2'
-
-        response = request.sync.get
-          url: 'http://127.0.0.1:4000/resource?name=test1',
-          json: true
-
-      it 'filters by the param', ->
-        expect(response.body.length).to.equal 1
-        expect(response.body[0].name).to.equal 'test1'
 
   describe 'falsy value in model', ->
     describe 'single search field', ->
@@ -326,64 +332,53 @@ describe 'GET many', ->
       expect(response.body[0].day).to.equal '2014-10-05'
       expect(response.body[1].day).to.equal '2014-10-15'
 
-  describe 'validate', ->
-    {model} = {}
-    before fibrous ->
-      ParentModel.sync.remove()
-      Model.sync.remove()
+  describe 'with a query parameter', ->
+    withModel (mongoose) ->
+      mongoose.Schema day: String
 
-      # default limit is after 2014-10-05
-      model1 = Model.sync.create
-        name: 'foo'
-        day: '2014-09-18'
-      model2 = Model.sync.create
-        name: 'bar'
-        day: '2014-09-27'
-      model3 = Model.sync.create
-        name: 'baz'
-        day: '2014-10-05'
-      model4 = Model.sync.create
-        name: 'lu'
-        day: '2014-10-09'
-      model5 = Model.sync.create
-        name: 'la'
-        day: '2014-10-15'
+    beforeEach ->
+      @resource = new ResourceSchema @model, {'day'}, queryParams:
+        after:
+          type: String
+          validate: (value) ->
+            /\d{4}-\d{2}-\d{2}/.test(value)
+          find: (value) ->
+            day: $gte: value
 
-    it 'returns a 400 if invalid', fibrous ->
-      response = request.sync.get
-        url: 'http://127.0.0.1:4000/resource_config?startDate=20141006',
-        json: true
+    withServer (app) ->
+      app.get '/res/', @resource.get(), @resource.send
+      app
 
+    it 'returns a 400 if the query parameter is invalid', fibrous ->
+      response = @request.sync.get '/res/?after=20141006'
       expect(response.statusCode).to.equal 400
 
-  describe 'match', ->
-    {model} = {}
-    before fibrous ->
-      ParentModel.sync.remove()
-      Model.sync.remove()
+  describe 'with an array query parameter', ->
+    withModel (mongoose) ->
+      mongoose.Schema day: String
 
-      # default limit is after 2014-10-05
-      model1 = Model.sync.create
-        name: 'foo'
-        day: '2014-09-18'
-      model2 = Model.sync.create
-        name: 'bar'
-        day: '2014-09-27'
-      model3 = Model.sync.create
-        name: 'baz'
-        day: '2014-10-05'
-      model4 = Model.sync.create
-        name: 'lu'
-        day: '2014-10-09'
-      model5 = Model.sync.create
-        name: 'la'
-        day: '2014-10-15'
+    beforeEach ->
+      weekdayMap =
+        Mo: '2014-12-01'
+        Tu: '2014-12-02'
+        We: '2014-12-03'
+        Th: '2014-12-04'
+        Fr: '2014-12-05'
+      @resource = new ResourceSchema @model, {'day'}, queryParams:
+        weekdays:
+          type: String
+          isArray: true
+          validate: (weekday) ->
+            weekday in Object.keys weekdayMap
+          find: (weekdays) ->
+            day: $in: (weekdayMap[weekday] for weekday in weekdays)
 
-    it 'returns a 400 if invalid', fibrous ->
-      response = request.sync.get
-        url: 'http://127.0.0.1:4000/resource_config?containsDays=20140918&containsDays=2014-10-05&containsDays=2014-10-15',
-        json: true
+    withServer (app) ->
+      app.get '/res/', @resource.get(), @resource.send
+      app
 
+    it 'returns a 400 if the query parameter is invalid', fibrous ->
+      response = @request.sync.get '/res/?weekdays=Mo&weekdays=Su'
       expect(response.statusCode).to.equal 400
 
   describe 'options.defaultLimit', ->

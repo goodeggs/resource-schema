@@ -1,53 +1,83 @@
+{suite, given} = require '../support/helpers'
 sinon = require 'sinon'
 fibrous = require 'fibrous'
 mongoose = require 'mongoose'
-Model = require './fixtures/model.coffee'
-ParentModel = require './fixtures/parent_model.coffee'
+Model = require '../fixtures/model.coffee'
+ParentModel = require '../fixtures/parent_model.coffee'
 expect = require('chai').expect
 request = require 'request'
-require './support/bootstrap'
+require '../support/bootstrap'
 
-MongooseResource = require '..'
+ResourceSchema = require '../..'
 
-{response, model} = {}
+suite 'GET one', ({withModel, withServer}) ->
+  given 'no params', ->
+    describe 'with a simple resource', ->
+      withModel (mongoose) ->
+        mongoose.Schema name: String
 
-describe 'GET one', ->
-  {model} = {}
-  describe 'no params', ->
-    before fibrous ->
-      Model.sync.remove()
-      model = Model.sync.create name: 'test'
-      ParentModel.sync.create
-        name: 'parent'
-        modelIds: [model._id]
+      beforeEach ->
+        @resource = new ResourceSchema @model
 
-    it 'returns the object if found', fibrous ->
-      response = request.sync.get
-        url: "http://127.0.0.1:4000/resource/#{model._id}"
-        json: true
-      expect(response.statusCode).to.equal 200
-      expect(response.body.name).to.equal 'test'
+      withServer (app) ->
+        app.get '/res/:_id', @resource.get('_id'), @resource.send
+        app
 
-    it 'returns the dynamic get value', fibrous ->
-      response = request.sync.get
-        url: "http://127.0.0.1:4000/resource/#{model._id}"
-        json: true
-      expect(response.statusCode).to.equal 200
-      expect(response.body.parentName).to.equal 'parent'
+      it 'returns the object if found', fibrous ->
+        model = @model.sync.create name: 'test'
+        response = @request.sync.get "/res/#{model._id}"
+        expect(response.statusCode).to.equal 200
+        expect(response.body.name).to.equal 'test'
 
-    it 'returns 404 if object not found', fibrous ->
-      response = request.sync.get
-        url: "http://127.0.0.1:4000/resource/#{new mongoose.Types.ObjectId()}"
-        json: true
-      expect(response.statusCode).to.equal 404
+      it 'returns 404 if object not found', fibrous ->
+        id = new mongoose.Types.ObjectId()
+        response = @request.sync.get "/res/#{id}"
+        expect(response.statusCode).to.equal 404
+        expect(response.body).to.deep.equal
+          statusCode: 404
+          error: 'Not Found'
+          message: "No resources found with _id of #{id}"
 
-    it 'returns 400 if objectId not valid', fibrous ->
-      response = request.sync.get
-        url: "http://127.0.0.1:4000/resource/1234"
-        json: true
-      expect(response.statusCode).to.equal 400
+      it 'returns 400 if objectId not valid', fibrous ->
+        response = @request.sync.get "/res/badId"
+        expect(response.statusCode).to.equal 400
+        expect(response.body).to.deep.equal
+          statusCode: 400
+          error: 'Bad Request'
+          message: "'badId' is an invalid ObjectId for field '_id'"
 
-  describe '$select', ->
+      it 'returns 500 if there are issues querying the database', fibrous ->
+        sinon.stub(@model, 'findOne').throws()
+        response = @request.sync.get "/res/#{mongoose.Types.ObjectId()}"
+        @model.findOne.restore()
+        expect(response.statusCode).to.equal 500
+
+    describe 'with a resource that has a synchronous dynamic field', ->
+      withModel (mongoose) ->
+        mongoose.Schema name: String
+
+      beforeEach ->
+        schema = {
+          '_id'
+          'name'
+          extra:
+            get: (model) -> "Hello there #{model.name}!"
+        }
+        @resource = new ResourceSchema @model, schema
+
+      withServer (app) ->
+        app.get '/res/:_id', @resource.get('_id'), @resource.send
+        app
+
+      it 'returns the dynamic get value', fibrous ->
+        model = @model.sync.create name: 'test'
+        response = @request.sync.get "/res/#{model._id}"
+        expect(response.statusCode).to.equal 200
+        expect(response.body.extra).to.equal 'Hello there test!'
+
+  given '$select', ->
+    {response, model} = {}
+
     describe 'single select', ->
       before fibrous ->
         Model.sync.remove()
