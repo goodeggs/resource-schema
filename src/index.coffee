@@ -96,9 +96,11 @@ module.exports = class ResourceSchema
     resourceByModelId[model._id.toString()] = resource
 
     @_buildContext(context, [resource], [model]).then =>
+      d = q.defer()
       @_applySetters(resourceByModelId, [model], context)
       model = new @Model(model)
-      model.save()
+      model.save(d.makeNodeResolver())
+      d.promise
     .then (modelSaved) =>
       res.status(201)
       @_sendResource(model, context)
@@ -302,6 +304,8 @@ module.exports = class ResourceSchema
     models.forEach (model) =>
       for resourceField, config of @schema
         continue if typeof config.set isnt 'function'
+        if not @schema[resourceField].field
+          throw new Error "Need to define 'field' for '#{resourceField}' in order to call 'set'"
         dot.set(model, @schema[resourceField].field, config.set(resourceByModelId[model._id.toString()], context))
 
   ###
