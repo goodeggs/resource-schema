@@ -4,33 +4,35 @@ mongoose = require 'mongoose'
 Model = require '../fixtures/model.coffee'
 expect = require('chai').expect
 request = require 'request'
-require '../support/bootstrap'
+{suite, given} = require '../support/helpers'
 
 MongooseResource = require '../..'
+ResourceSchema = require '../..'
 
 {response, model} = {}
 
-describe 'POST one', ->
-  before fibrous ->
-    Model.sync.remove()
+suite 'POST one', ({withModel, withServer}) ->
+  withModel (mongoose) ->
+    mongoose.Schema name: String
 
-    response = request.sync.post
-      url: "http://127.0.0.1:4000/resource"
-      json:
-        name: 'test'
-        productName: 'apples'
-        product: price: 25
+  beforeEach ->
+    schema = { '_id', 'name' }
+    @resource = new ResourceSchema @model, schema
 
-  it 'returns the saved resource', ->
-    expect(response.statusCode).to.equal 201
-    expect(response.body.name).to.equal 'test'
-    expect(response.body.productName).to.equal 'apples'
-    expect(response.body.product.price).to.equal 25
-    expect(response.body._id).to.be.ok
+  withServer (app) ->
+    app.post '/res', @resource.post(), @resource.send
+    app
 
-  it 'saves to the DB, in the model schema', fibrous ->
-    modelsFound = Model.sync.find()
+  beforeEach fibrous ->
+    @response = @request.sync.post "/res",
+      json: { name: 'apple' }
+
+  it 'returns the saved resources', fibrous ->
+    expect(@response.statusCode).to.equal 201
+    expect(@response.body.name).to.equal 'apple'
+    expect(@response.body._id).to.be.ok
+
+  it 'saves the models to the DB', fibrous ->
+    modelsFound = @model.sync.find()
     expect(modelsFound.length).to.equal 1
-    expect(modelsFound[0].product.name).to.equal 'apples'
-    expect(modelsFound[0].product.price).to.equal 25
-    expect(modelsFound[0].name).to.equal 'test'
+    expect(modelsFound[0].name).to.equal 'apple'

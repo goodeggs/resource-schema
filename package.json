@@ -12,6 +12,13 @@
     "type": "git",
     "url": "git://github.com/goodeggs/resource-schema.git"
   },
+  "keywords": [
+    "resource",
+    "api",
+    "schema",
+    "express",
+    "mongoose"
+  ],
   "homepage": "https://github.com/goodeggs/resource-schema",
   "bugs": "https://github.com/goodeggs/resource-schema/issues",
   "dependencies": {

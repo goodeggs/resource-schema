@@ -3,6 +3,8 @@ express = require 'express'
 url = require 'url'
 namespacedRequest = require 'namespaced-request'
 Boom = require 'boom'
+bodyParser = require 'body-parser'
+cookieParser = require 'cookie-parser'
 
 port = process.env.PORT || 93280
 
@@ -31,7 +33,11 @@ suiteHelpers =
 
   withServer: (appFn) ->
     beforeEach (done) ->
-      app = appFn.call @, express()
+      app = express()
+      app.use bodyParser.json()
+      app.use bodyParser.urlencoded()
+      app.use cookieParser()
+      app = appFn.call @, app
       app.use (err, req, res, next) -> # add standard error-catching middleware
         throw err unless err.isBoom
         console.error err.output.payload

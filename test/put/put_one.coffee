@@ -1,132 +1,148 @@
 sinon = require 'sinon'
 fibrous = require 'fibrous'
 mongoose = require 'mongoose'
-Model = require '../fixtures/model'
-ModelCustomKey = require '../fixtures/model_custom_key'
-ParentModel = require '../fixtures/parent_model'
+Model = require '../fixtures/model.coffee'
 expect = require('chai').expect
 request = require 'request'
-require '../support/bootstrap'
+mongoose = require 'mongoose'
+{suite, given} = require '../support/helpers'
 
 MongooseResource = require '../..'
+ResourceSchema = require '../..'
 
 {response, model} = {}
 
-describe 'PUT one', ->
-  describe 'updating model values', ->
-    before fibrous ->
-      Model.sync.remove()
-      ParentModel.sync.remove()
-      model = Model.sync.create
-        name: 'test'
-        product:
-          name: 'apples'
-          price: 25
-      ParentModel.sync.create
-        name: 'parent'
-        modelIds: [model._id]
+suite 'PUT one', ({withModel, withServer}) ->
+  given 'updating model values', ->
+    withModel (mongoose) ->
+      mongoose.Schema name: String
 
-      response = request.sync.put
-        url: "http://127.0.0.1:4000/resource/#{model._id}"
-        json:
-          name: 'test'
-          productName: 'berries'
-          product: price: 25
+    beforeEach ->
+      schema = { '_id', 'name' }
+      @resource = new ResourceSchema @model, schema
 
-    it 'returns the updated resource', ->
+    withServer (app) ->
+      app.put '/res/:_id', @resource.put('_id'), @resource.send
+      app
+
+    beforeEach fibrous ->
+      model = @model.sync.create name: 'orange'
+      model.name = 'apple'
+      @response = @request.sync.put "/res/#{model._id}",
+        json: {name: 'apple'}
+
+    it 'returns the saved resources', fibrous ->
+      expect(@response.statusCode).to.equal 200
+      expect(@response.body.name).to.equal 'apple'
+      expect(@response.body._id).to.be.ok
+
+    it 'saves the updated model to the DB', fibrous ->
+      modelsFound = @model.sync.find()
+      expect(modelsFound.length).to.equal 1
+      expect(modelsFound[0].name).to.equal 'apple'
+
+  given 'updating falsy values', ->
+    withModel (mongoose) ->
+      mongoose.Schema active: Boolean
+
+    beforeEach ->
+      schema = { '_id', 'active' }
+      @resource = new ResourceSchema @model, schema
+
+    withServer (app) ->
+      app.put '/res/:_id', @resource.put('_id'), @resource.send
+      app
+
+    it 'updates the falsy value', fibrous ->
+      model = @model.sync.create { active: true }
+      model.active = false
+
+      response = @request.sync.put "/res/#{model._id}", json: {active: false}
       expect(response.statusCode).to.equal 200
-      expect(response.body.name).to.equal 'test'
-      expect(response.body.productName).to.equal 'berries'
-      expect(response.body.product.price).to.equal 25
+      expect(response.body.active).to.equal false
       expect(response.body._id).to.be.ok
 
-    it 'returns the updated resource with dynamic fields', ->
-      expect(response.body.parentName).to.equal 'parent'
-
-    it 'saves to the DB, in the model schema', fibrous ->
-      modelsFound = Model.sync.find()
+      modelsFound = @model.sync.find()
       expect(modelsFound.length).to.equal 1
-      expect(modelsFound[0].product.name).to.equal 'berries'
-      expect(modelsFound[0].product.price).to.equal 25
-      expect(modelsFound[0].name).to.equal 'test'
+      expect(modelsFound[0].active).to.equal false
 
-  describe 'updating falsy values', ->
-    before fibrous ->
-      Model.sync.remove()
-      model = Model.sync.create
-        name: 'test'
-        active: true
+  given 'putting to a custom key (not _id)', ->
+    withModel (mongoose) ->
+      mongoose.Schema
+        key: type: String
+        name: String
 
-    it 'sets the values', fibrous ->
-      response = request.sync.put
-        url: "http://127.0.0.1:4000/resource/#{model._id}"
-        json:
-          name: 'test'
-          active: false
+    beforeEach ->
+      schema = { 'key', 'name' }
+      @resource = new ResourceSchema @model, schema
 
-      expect(Model.sync.findById(model._id).active).to.equal false
-      expect(response.body.active).to.equal false
+    withServer (app) ->
+      app.put '/res/:key', @resource.put('key'), @resource.send
+      app
 
-  describe 'putting custom key (resource created before)', ->
-    before fibrous ->
-      ModelCustomKey.sync.remove()
-      modelCustomKey = ModelCustomKey.sync.create
-        key: 'foo'
-        name: 'test1'
+    it 'updates the resource', fibrous ->
+      model = @model.sync.create { key: '123', name: 'apple' }
+      model.name = 'orange'
 
-      response = request.sync.put
-        url: "http://127.0.0.1:4000/resource_custom_key/foo"
-        json:
-          key: 'foo'
-          name: 'test2'
-
-    it 'returns the updated resource (does not error for trying to create new _id)', ->
+      response = @request.sync.put "/res/#{model.key}", json: model
       expect(response.statusCode).to.equal 200
-      expect(response.body).to.deep.equal
-        key: 'foo'
-        name: 'test2'
+      expect(response.body.name).to.equal 'orange'
 
-    it 'creates the resource in the database', fibrous ->
-      modelFound = ModelCustomKey.sync.findOne(key: 'foo')
-      expect(ModelCustomKey.sync.count()).to.equal 1
-      expect(modelFound.name).to.equal 'test2'
-      expect(modelFound.key).to.equal 'foo'
+      modelsFound = @model.sync.find()
+      expect(modelsFound.length).to.equal 1
+      expect(modelsFound[0].name).to.equal 'orange'
+      @model.sync.remove()
 
-  describe 'putting to uncreated resource (upserting)', ->
-    before fibrous ->
-      ModelCustomKey.sync.remove()
-      modelCustomKey = ModelCustomKey.sync.create
-        key: 'foo'
-        name: 'test1'
+  given 'putting to uncreated resource (upserting)', ->
+    withModel (mongoose) ->
+      mongoose.Schema name: String
 
-      response = request.sync.put
-        url: "http://127.0.0.1:4000/resource_custom_key/bar"
-        json:
-          key: 'bar'
-          name: 'test2'
+    beforeEach ->
+      schema = { '_id', 'name' }
+      @resource = new ResourceSchema @model, schema
 
-    it 'returns the upserted resource', ->
+    withServer (app) ->
+      app.put '/res/:_id', @resource.put('_id'), @resource.send
+      app
+
+    it 'upserts the resource', fibrous ->
+      newId = new mongoose.Types.ObjectId()
+      response = @request.sync.put "/res/#{newId}", json: {name: 'apple'}
+
       expect(response.statusCode).to.equal 200
-      expect(response.body).to.deep.equal
-        key: 'bar'
-        name: 'test2'
+      expect(response.body.name).to.equal 'apple'
+      expect(response.body._id).to.equal newId.toString()
 
-    it 'creates the resource in the database', fibrous ->
-      modelFound = ModelCustomKey.sync.findOne(key: 'bar')
-      expect(ModelCustomKey.sync.count()).to.equal 2
-      expect(modelFound.name).to.equal 'test2'
-      expect(modelFound.key).to.equal 'bar'
+      modelsFound = @model.sync.find()
+      expect(modelsFound.length).to.equal 1
+      expect(modelsFound[0].name).to.equal 'apple'
 
-  describe 'updating dynamic $set values', ->
-    before fibrous ->
-      Model.sync.remove()
-      model = Model.sync.create name: 'hello'
+  given 'updating resource with setter', ->
 
-      response = request.sync.put
-        url: "http://127.0.0.1:4000/resource/#{model._id}"
-        json: { name: 'GoodBye' }
+    withModel (mongoose) ->
+      mongoose.Schema name: String
 
-    it 'sets the value to lowercase when saved', fibrous ->
-      model = Model.sync.findOne()
-      expect(model.name).to.equal 'goodbye'
-      expect(response.body.name).to.equal 'goodbye'
+    beforeEach ->
+      schema = {
+        '_id'
+        'name':
+          field: 'name'
+          set: (resource) -> resource.name.toLowerCase()
+      }
+      @resource = new ResourceSchema @model, schema
+
+    withServer (app) ->
+      app.put '/res/:_id', @resource.put('_id'), @resource.send
+      app
+
+    it 'applies the setter', fibrous ->
+      model = @model.sync.create name: 'Apple'
+      response = @request.sync.put "/res/#{model._id}", json: model
+
+      expect(response.statusCode).to.equal 200
+      expect(response.body.name).to.equal 'apple'
+      expect(response.body._id).to.be.ok
+
+      modelsFound = @model.sync.find()
+      expect(modelsFound.length).to.equal 1
+      expect(modelsFound[0].name).to.equal 'apple'

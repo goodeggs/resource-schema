@@ -79,96 +79,86 @@ suite 'GET one', ({withModel, withServer}) ->
     {response, model} = {}
 
     describe 'single select', ->
-      before fibrous ->
-        Model.sync.remove()
-        targetId = new mongoose.Types.ObjectId()
-        model = Model.sync.create
-          name: 'test'
-          product: name: 'apples'
+      withModel (mongoose) ->
+        mongoose.Schema
+          name: String
+          active: Boolean
 
-        response = request.sync.get
-          url: "http://127.0.0.1:4000/resource/#{model._id}?$select=name",
-          json: true
+      beforeEach ->
+        schema = { 'name', 'active' }
+        @resource = new ResourceSchema @model, schema
 
-      it 'selects from the available resource fields', ->
+      withServer (app) ->
+        app.get '/res/:_id', @resource.get('_id'), @resource.send
+        app
+
+      it 'selects given resource field', fibrous ->
+        model = @model.sync.create { name: 'test', active: true }
+        response = @request.sync.get "/res/#{model._id}?$select=name"
         expect(response.statusCode).to.equal 200
         expect(response.body).to.deep.equal name: 'test'
         expect(response.body.product).to.be.undefined
 
     describe 'nested select', ->
-      before fibrous ->
-        Model.sync.remove()
-        targetId = new mongoose.Types.ObjectId()
-        model = Model.sync.create
-          name: 'test'
-          product: price: 25
+      withModel (mongoose) ->
+        mongoose.Schema
+          product:
+            name: String
+            price: Number
 
-        response = request.sync.get
-          url: "http://127.0.0.1:4000/resource/#{model._id}",
-          json: true
-          qs: $select: 'product.price'
+      beforeEach ->
+        schema = { 'product.name', 'product.price' }
+        @resource = new ResourceSchema @model, schema
 
-      it 'selects from the available resource fields', ->
+      withServer (app) ->
+        app.get '/res/:_id', @resource.get('_id'), @resource.send
+        app
+
+      it 'selects from the available resource fields', fibrous ->
+        model = @model.sync.create { product: { name: 'test', price: 2.99 } }
+        response = @request.sync.get "/res/#{model._id}?$select=product.price"
         expect(response.statusCode).to.equal 200
-        expect(response.body.name).to.be.undefined
-        expect(response.body.product.price).to.equal 25
-
-    describe 'nested select', ->
-      before fibrous ->
-        Model.sync.remove()
-        targetId = new mongoose.Types.ObjectId()
-        model = Model.sync.create
-          name: 'test'
-          product: price: 25
-
-        response = request.sync.get
-          url: "http://127.0.0.1:4000/resource/#{model._id}?$select=product.price",
-          json: true
-
-      it 'selects from the available resource fields', ->
-        expect(response.statusCode).to.equal 200
-        expect(response.body.name).to.be.undefined
-        expect(response.body.product.price).to.equal 25
+        expect(response.body).to.deep.equal {product: {price: 2.99}}
 
     describe 'multiple select', ->
-      before fibrous ->
-        Model.sync.remove()
-        targetId = new mongoose.Types.ObjectId()
-        model = Model.sync.create
-          name: 'test'
+      withModel (mongoose) ->
+        mongoose.Schema
           product:
-            price: 25
-            name: 'apples'
+            name: String
+            unit: String
+            price: Number
 
-        response = request.sync.get
-          url: "http://127.0.0.1:4000/resource/#{model._id}?$select[]=product.price&$select[]=productName",
-          json: true
+      beforeEach ->
+        schema = { 'product.name', 'product.price', 'product.unit'  }
+        @resource = new ResourceSchema @model, schema
 
+      withServer (app) ->
+        app.get '/res/:_id', @resource.get('_id'), @resource.send
+        app
 
-      it 'selects from the available resource fields', ->
+      it 'selects from the available resource fields', fibrous ->
+        model = @model.sync.create { product: { name: 'apple', price: 2.99, unit: 'bag'} }
+        response = @request.sync.get "/res/#{model._id}?$select=product.price&$select=product.name"
         expect(response.statusCode).to.equal 200
-        expect(response.body.name).to.be.undefined
-        expect(response.body.productName).to.equal 'apples'
-        expect(response.body.product.price).to.equal 25
+        expect(response.body).to.deep.equal {product: {price: 2.99, name: 'apple'}}
 
     describe 'multiple select space syntax', ->
-      before fibrous ->
-        Model.sync.remove()
-        targetId = new mongoose.Types.ObjectId()
-        model = Model.sync.create
-          name: 'test'
-          product:
-            price: 25
-            name: 'apples'
+      withModel (mongoose) ->
+        mongoose.Schema
+          name: String
+          unit: String
+          price: Number
 
-        response = request.sync.get
-          url: "http://127.0.0.1:4000/resource/#{model._id}",
-          json: true
-          qs: $select: 'product.price productName'
+      beforeEach ->
+        schema = { 'name', 'price', 'unit'  }
+        @resource = new ResourceSchema @model, schema
 
+      withServer (app) ->
+        app.get '/res/:_id', @resource.get('_id'), @resource.send
+        app
 
-      it 'selects from the available resource fields', ->
+      it 'selects from the available resource fields', fibrous ->
+        model = @model.sync.create { name: 'apple', price: 2.99, unit: 'bag'}
+        response = @request.sync.get "/res/#{model._id}?$select=price%20name"
         expect(response.statusCode).to.equal 200
-        expect(response.body.name).to.be.undefined
-        expect(response.body.productName).to.equal 'apples'
-        expect(response.body.product.price).to.equal 25
+        expect(response.body).to.deep.equal {price: 2.99, name: 'apple'}
