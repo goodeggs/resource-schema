@@ -144,9 +144,10 @@ module.exports = class ResourceSchema
   _putOne: (paramId) ->
     (req, res, next) =>
       context = {req, res, next}
+      resource = req.body
+      return next Boom.badRequest "PUT must have a req.body" if not resource?
       return if not @_enforceValidity(req.query, context)
       return if not @_enforceValidity(req.body, context)
-      resource = req.body
 
       idValue = req.params[paramId]
       query = {}
@@ -173,9 +174,10 @@ module.exports = class ResourceSchema
 
   _putMany: (req, res, next) =>
     context = {req, res, next}
+    resources = req.body
+    return next Boom.badRequest "PUT must have a req.body" if not resources?
     return if not @_enforceValidity(req.query, context)
     return if not @_enforceValidity(req.body, context)
-    resources = req.body
     for resource in resources
       return if not @_enforceValidity(resource, context)
     resourceByModelId = {}
@@ -306,7 +308,9 @@ module.exports = class ResourceSchema
         continue if typeof config.set isnt 'function'
         if not @schema[resourceField].field
           throw new Error "Need to define 'field' for '#{resourceField}' in order to call 'set'"
-        dot.set(model, @schema[resourceField].field, config.set(resourceByModelId[model._id.toString()], context))
+        setValue = config.set(resourceByModelId[model._id.toString()], context)
+        continue if setValue is undefined
+        dot.set(model, @schema[resourceField].field, setValue)
 
   ###
   Wait for all getters to update resources

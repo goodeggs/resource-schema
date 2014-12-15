@@ -34,6 +34,7 @@ suiteHelpers =
       app = appFn.call @, express()
       app.use (err, req, res, next) -> # add standard error-catching middleware
         throw err unless err.isBoom
+        console.error err.output.payload
         res.status err.output.statusCode
         res.send err.output.payload
       @server = app.listen port, done
