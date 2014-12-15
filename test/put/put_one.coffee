@@ -117,8 +117,7 @@ suite 'PUT one', ({withModel, withServer}) ->
       expect(modelsFound.length).to.equal 1
       expect(modelsFound[0].name).to.equal 'apple'
 
-  given 'updating resource with setter', ->
-
+  given 'PUT resource with set field', ->
     withModel (mongoose) ->
       mongoose.Schema name: String
 
@@ -146,3 +145,53 @@ suite 'PUT one', ({withModel, withServer}) ->
       modelsFound = @model.sync.find()
       expect(modelsFound.length).to.equal 1
       expect(modelsFound[0].name).to.equal 'apple'
+
+  given 'PUT resource with optional fields', ->
+    withModel (mongoose) ->
+      mongoose.Schema
+        name: String
+        age: Number
+
+    beforeEach ->
+      schema = {
+        '_id'
+        'name'
+        'age':
+          optional: true
+          field: 'age'
+        'score':
+          optional: true
+          get: -> 95
+      }
+      @resource = new ResourceSchema @model, schema
+
+    withServer (app) ->
+      app.put '/res/:_id', @resource.put('_id'), @resource.send
+      app
+
+    it 'returns the optional field if it is included in the request body', fibrous ->
+      model = @model.sync.create
+        name: 'bob'
+        age: 10
+
+      response = @request.sync.put "/res/#{model._id}",
+        json:
+          name: 'joe'
+          age: 10
+          score: 95
+
+      expect(response.statusCode).to.equal 200
+      expect(response.body.name).to.equal 'joe'
+      expect(response.body.score).to.equal 95
+      expect(response.body.age).to.equal 10
+
+    it 'does not return the optional field if it is not included in the request body', fibrous ->
+      model = @model.sync.create
+        name: 'bob'
+        age: 10
+
+      response = @request.sync.put "/res/#{model._id}", json: {name: 'joe'}
+      expect(response.statusCode).to.equal 200
+      expect(response.body.name).to.equal 'joe'
+      expect(response.body.score).to.be.undefined
+      expect(response.body.age).to.be.undefined

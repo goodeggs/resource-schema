@@ -16,6 +16,9 @@ module.exports = class ResourceSchema
       else
         @_generateSchemaFromModel(@Model)
 
+    @resourceFields = Object.keys(@schema)
+    @defaultResourceFields = @resourceFields.filter((field) => not @schema[field].optional)
+
   ###
   Generate middleware to handle GET requests for resource
   ###
@@ -94,6 +97,9 @@ module.exports = class ResourceSchema
     requestContext = {req, res, next}
     resource = req.body
     return if not @_enforceValidity(resource, requestContext)
+
+    @_extendQueryWithImplicitOptionalFields([resource], requestContext)
+
     model = @_createModelFromResource resource
     resourceByModelId = {}
     resourceByModelId[model._id.toString()] = resource
@@ -116,6 +122,9 @@ module.exports = class ResourceSchema
 
     for resource in resources
       return if not @_enforceValidity(resource, requestContext)
+
+    @_extendQueryWithImplicitOptionalFields(resources, requestContext)
+
     resourceByModelId = {}
     models = resources.map (resource) =>
       model = @_createModelFromResource(resource)
@@ -153,6 +162,8 @@ module.exports = class ResourceSchema
       return if not @_enforceValidity(req.query, requestContext)
       return if not @_enforceValidity(req.body, requestContext)
 
+      @_extendQueryWithImplicitOptionalFields([resource], requestContext)
+
       idValue = req.params[paramId]
       query = {}
       query[paramId] = idValue
@@ -183,6 +194,9 @@ module.exports = class ResourceSchema
     return if not @_enforceValidity(req.body, requestContext)
     for resource in resources
       return if not @_enforceValidity(resource, requestContext)
+
+    @_extendQueryWithImplicitOptionalFields(resources, requestContext)
+
     resourceByModelId = {}
     models = resources.map (resource) =>
       model = @_createModelFromResource(resource)
@@ -282,10 +296,11 @@ module.exports = class ResourceSchema
     model._id ?= new mongoose.Types.ObjectId()
     model
 
-  _createResourceFromModel: (model, resourceFields) =>
+  _createResourceFromModel: (model, requestContext) =>
+    {req} = requestContext
     resource = {}
 
-    resourceFields = resourceFields.split(' ') if typeof resourceFields is 'string'
+    resourceSelectFields = @_getResourceSelectFields(req.query)
 
     #set _id for aggregate resources
     if @options.groupBy?.length
@@ -294,7 +309,8 @@ module.exports = class ResourceSchema
     #set all other fields
     for resourceField, config of @schema
       # TODO set default select to all fields?
-      if fieldIsSelectable = !resourceFields? or resourceField in resourceFields
+      fieldIsSelected = resourceField in resourceSelectFields
+      if fieldIsSelected
         if config.field
           value = dot.get model, config.field
           dot.set(resource, resourceField, value)
@@ -320,7 +336,7 @@ module.exports = class ResourceSchema
   Wait for all getters to update resources
   ###
   _applyGetters: (resourceByModelId, models, requestContext) =>
-    selectedResourceFields = @_getSelectedResourceFields(requestContext.req.query)
+    selectedResourceFields = @_getResourceSelectFields(requestContext.req.query)
     for model in models
       resource = resourceByModelId[model._id.toString()]
       for resourceField, config of @schema
@@ -361,18 +377,16 @@ module.exports = class ResourceSchema
   @param [Object] query - query params from client
   @return [Array] resource fields
   ###
-  _getSelectedResourceFields: (query) =>
-    [resourceFields] = @_getResourceAndModelFields()
-    select = query.$select
+  _getResourceSelectFields: (query) =>
+    $select = @_getSelectFields(query)
 
-    resourceFields =
-      if select
-        select = select.split(' ') if typeof select is 'string'
-        _(select).intersection resourceFields
+    fields =
+      if $select.length
+        $select
       else
-        _(resourceFields).reject (resourceField) => @schema[resourceField].optional
+        @defaultResourceFields
 
-    _.union(resourceFields, @_getAddFields(query))
+    _(fields).union(@_getAddFields(query))
 
   ###
   Get all valid $add fields from the query. The add fields are used to
@@ -381,8 +395,6 @@ module.exports = class ResourceSchema
   @returns [Array] valid keys to add from schema
   ###
   _getAddFields: (query) =>
-    [resourceFields] = @_getResourceAndModelFields()
-
     addFields =
       if typeof query.$add is 'string'
         query.$add.split(' ')
@@ -391,28 +403,34 @@ module.exports = class ResourceSchema
       else
         []
 
-    _(addFields).intersection(resourceFields)
+    _(addFields).intersection(@resourceFields)
+
+  ###
+  Get all valid $select fields from the query. The sekect fields are used to
+  similar to mongoose select
+  @param [Object] query - query params from client
+  @returns [Array] valid keys to add from schema
+  ###
+  _getSelectFields: (query) =>
+    selectFields =
+      if typeof query.$select is 'string'
+        query.$select.split(' ')
+      else if Array.isArray query.$select
+        query.$select
+      else
+        []
+
+    _(selectFields).intersection(@resourceFields)
 
   ###
   Convert select fields in query, to fields that can be used for
   @param [Object] query - query params from client
+  @returns [String] space separated string of model select fields
   ###
   _getModelSelectFields: (query) =>
-    [resourceFields, modelFields] = @_getResourceAndModelFields()
-    select = query.$select
-    addFields = @_getAddFields(query)
-
-    modelSelectFields =
-      if select
-        select = select.split(' ') if typeof select is 'string'
-        resourceFields = _(select).intersection resourceFields
-        resourceFields.map (resourceSelectField) => @schema[resourceSelectField].field
-      else
-        resourceFields.map (resourceField) =>
-          if @schema[resourceField].field and (not @schema[resourceField].optional or resourceField in addFields)
-            @schema[resourceField].field
-
-    _(modelSelectFields).compact().join(' ')
+    resourceSelectFields = @_getResourceSelectFields(query)
+    modelSelectFields = resourceSelectFields.map (resourceSelectField) => @schema[resourceSelectField].field
+    _.compact(modelSelectFields).join(' ')
 
   ###
   Remove all invalid query parameters (not in schema) and reserved query
@@ -428,10 +446,9 @@ module.exports = class ResourceSchema
   ###
   _getResourceQuery: (query) =>
     query = @_convertKeysToDotStrings query
-    [resourceFields, modelFields] = @_getResourceAndModelFields()
     validFields = {}
     for field, value of query
-      if field in resourceFields
+      if field in @resourceFields
         dot.set validFields, field, value
     queryFields = @_convertKeysToDotStrings validFields
     @_convertTypes(queryFields)
@@ -459,11 +476,6 @@ module.exports = class ResourceSchema
           dotKeys[newKey] = value
     dotStringify(obj)
     return dotKeys
-
-  _getResourceAndModelFields: =>
-    resourceFields = Object.keys @schema
-    modelFields = resourceFields.map (resourceField) => @schema[resourceField].field
-    [_.compact(resourceFields), _.compact(modelFields)]
 
   ###
   If no schema provided, generate a schema that directly mirrors the mongoose model fields
@@ -635,7 +647,7 @@ module.exports = class ResourceSchema
     resolvePromises = []
     requestContext.resources = resources
     requestContext.models = models
-    selectedResourceFields = @_getSelectedResourceFields(req.query)
+    selectedResourceFields = @_getResourceSelectFields(req.query)
 
     # options resolvers
     for resolveVar, resolveMethod of @options.resolve
@@ -675,7 +687,7 @@ module.exports = class ResourceSchema
 
   _sendResource: (model, requestContext) ->
     {req, res, next} = requestContext
-    resource = @_createResourceFromModel(model, req.query.$select)
+    resource = @_createResourceFromModel(model, requestContext)
     resourceByModelId = {}
     resourceByModelId[model._id.toString()] = resource
     builtContext = @_buildContext(requestContext, [resource], [model])
@@ -693,7 +705,7 @@ module.exports = class ResourceSchema
     resources = models.map (model) =>
       if not mongoose.Types.ObjectId.isValid(model._id.toString())
         model._id = _(model._id).values().join('|')
-      resource = @_createResourceFromModel(model, req.query.$select)
+      resource = @_createResourceFromModel(model, requestContext)
       resourceByModelId[model._id.toString()] = resource
       resource
 
@@ -706,3 +718,15 @@ module.exports = class ResourceSchema
         next()
       .catch (err) ->
         next Boom.wrap err
+
+  ###
+  When doing PUT or POST requests, if an optional field is on the resource, attach
+  it to the $add query. The resource should be returned in the same format it was posted.
+  ###
+  _extendQueryWithImplicitOptionalFields: (resources, requestContext) ->
+    {req} = requestContext
+    req.query.$add = @_getAddFields(req.query)
+    resource = resources[0]
+    for own resourceField, config of @schema when config.optional
+      if dot.get(resource, resourceField) isnt undefined
+        req.query.$add.push(resourceField)
