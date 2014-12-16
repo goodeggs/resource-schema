@@ -50,14 +50,13 @@ module.exports = class ResourceSchema
         return next Boom.notFound("No resources found with #{paramId} of #{idValue}") if not model?
         @_sendResource(model, requestContext)
       .then null, (err) =>
-        next Boom.wrap(err) if err
+        @_handleRequestError(err, requestContext)
 
   _getMany: (req, res, next) =>
     requestContext = {req, res, next}
     return if not @_enforceValidity(req.query, requestContext)
 
-    @_getMongoQuery(req.query, requestContext).then (mongoQuery) =>
-      d = q.defer()
+    @_getMongoQuery(requestContext).then (mongoQuery) =>
       # normal (non aggregate) resource
       if not @options.groupBy
         modelQuery = @Model.find(mongoQuery)
@@ -72,12 +71,11 @@ module.exports = class ResourceSchema
 
       limit = @_getLimit req.query
       modelQuery.limit(limit) if limit
-      modelQuery.exec(d.makeNodeResolver())
-      d.promise
+      modelQuery.exec()
     .then (models) =>
       @_sendResources(models, requestContext)
     .then null, (err) =>
-      next Boom.wrap(err)
+      @_handleRequestError(err, requestContext)
 
   ###
   Generate middleware to handle POST requests for resource
@@ -106,16 +104,14 @@ module.exports = class ResourceSchema
     resourceByModelId[model._id.toString()] = resource
 
     @_buildContext(requestContext, [resource], [model]).then =>
-      d = q.defer()
       @_applySetters(resourceByModelId, [model], requestContext)
       model = new @Model(model)
-      model.save(d.makeNodeResolver())
-      d.promise
+      model.save()
     .then (modelSaved) =>
       res.status(201)
       @_sendResource(model, requestContext)
-    .then null, (err) ->
-      next Boom.wrap(err)
+    .then null, (err) =>
+      @_handleRequestError(err, requestContext)
 
   _postMany: (req, res, next) ->
     requestContext = {req, res, next}
@@ -144,7 +140,7 @@ module.exports = class ResourceSchema
       res.status(201)
       @_sendResources(modelsSaved, requestContext)
     .then null, (err) =>
-      next Boom.wrap(err)
+      @_handleRequestError(err, requestContext)
 
   ###
   Generate middleware to handle PUT requests for resource
@@ -175,17 +171,15 @@ module.exports = class ResourceSchema
       resourceByModelId = {}
       resourceByModelId[model._id.toString()] = resource
       @_buildContext(requestContext, [resource], [model]).then =>
-        d = q.defer()
         @_applySetters(resourceByModelId, [model], requestContext)
         delete model._id
-        @Model.findOneAndUpdate(query, model, {upsert: true}).lean().exec(d.makeNodeResolver())
-        d.promise
+        @Model.findOneAndUpdate(query, model, {upsert: true}).lean().exec()
       .then (model) =>
         return next Boom.notFound() if not model?
         res.status(200)
         @_sendResource(model, requestContext)
       .then null, (err) =>
-        next Boom.wrap(err)
+        @_handleRequestError(err, requestContext)
 
   _putMany: (req, res, next) =>
     requestContext = {req, res, next}
@@ -217,7 +211,7 @@ module.exports = class ResourceSchema
     .then (updatedModels) =>
       @_sendResources(updatedModels, requestContext)
     .then null, (err) ->
-      next Boom.wrap(err)
+      @_handleRequestError(err, requestContext)
 
   ###
   Generate middleware to handle DELETE requests for resource
@@ -246,10 +240,13 @@ module.exports = class ResourceSchema
     res.send res.body
 
   ###
-  Build the model query from the query parameters
-  returns a promise with the query inside it
+  Build the model query object from the query parameters.
+  @returns [Promise]
   ###
-  _getMongoQuery: (requestQuery, {req, res, next}) =>
+  _getMongoQuery: (requestContext) =>
+    {req, res, next} = requestContext
+    requestQuery = req.query
+
     modelQuery = clone(@options.defaultQuery) or {}
     queryPromises = []
 
@@ -287,7 +284,11 @@ module.exports = class ResourceSchema
 
     q.all(queryPromises).then -> modelQuery
 
-  _createModelFromResource: (resource, addId) =>
+  ###
+  @param [Object] resource - resource to convert
+  @returns [Object] model created from resource
+  ###
+  _createModelFromResource: (resource) =>
     return if not resource?
     model = {}
     for resourceField, config of @schema
@@ -297,6 +298,10 @@ module.exports = class ResourceSchema
     model._id ?= new mongoose.Types.ObjectId()
     model
 
+  ###
+  @param [Object] model - model to convert
+  @returns [Object] resource created from model
+  ###
   _createResourceFromModel: (model, requestContext) =>
     {req} = requestContext
     resource = {}
@@ -373,7 +378,7 @@ module.exports = class ResourceSchema
 
   ###
   Get resource fields that will be returned with this request. Reject everything
-  that is added or not selected in the query parameters.
+  that not added or selected
 
   @param [Object] query - query params from client
   @return [Array] resource fields
@@ -393,7 +398,7 @@ module.exports = class ResourceSchema
   Get all valid $add fields from the query. The add fields are used to
   select optional fields from schema
   @param [Object] query - query params from client
-  @returns [Array] valid keys to add from schema
+  @returns [Array] valid add fields
   ###
   _getAddFields: (query) =>
     addFields =
@@ -407,10 +412,10 @@ module.exports = class ResourceSchema
     _(addFields).intersection(@resourceFields)
 
   ###
-  Get all valid $select fields from the query. The sekect fields are used to
-  similar to mongoose select
+  Get all valid $select fields from the query. Select fields are used to select
+  specific resource fields to return.
   @param [Object] query - query params from client
-  @returns [Array] valid keys to add from schema
+  @returns [Array] valid select fields
   ###
   _getSelectFields: (query) =>
     selectFields =
@@ -424,7 +429,7 @@ module.exports = class ResourceSchema
     _(selectFields).intersection(@resourceFields)
 
   ###
-  Convert select fields in query, to fields that can be used for
+  Get model select fields used when querying the models.
   @param [Object] query - query params from client
   @returns [String] space separated string of model select fields
   ###
@@ -434,8 +439,8 @@ module.exports = class ResourceSchema
     _.compact(modelSelectFields).join(' ')
 
   ###
-  Remove all invalid query parameters (not in schema) and reserved query
-  parameters (like $limit and $add).
+  Get resource query object from the request query. This query object comes from
+  all the non reserved query parameters (e.g. ?name=joe, or product.price=15)
   @param [Object] query - query params from client
   @returns [Object] valid query params and values
   @example
@@ -456,8 +461,7 @@ module.exports = class ResourceSchema
     queryFields or {}
 
   ###
-  Collapse all nested fields to dot format. Ignore Reserved Keywords.
-  This is used for the schema, the query params, and the incoming resources
+  Collapse all nested fields to dot format. Ignore Reserved Keywords on schema.
   @example {a: {b: 1}} -> {'a.b': 1}
   ###
   _convertKeysToDotStrings: (obj) =>
@@ -481,6 +485,7 @@ module.exports = class ResourceSchema
   ###
   If no schema provided, generate a schema that directly mirrors the mongoose model fields
   @param [Object] Model - Model to generate schema from
+  @returns [Object] new schema
   ###
   _generateSchemaFromModel: (Model) =>
     # Paths already in dot notation
@@ -509,17 +514,8 @@ module.exports = class ResourceSchema
   - converts all keys to dot strings
   - Adds field, if using implicit model field syntax
   @example
-    {
-      'test': {
-        'property': 'test'
-      }
-    }
-    =>
-    {
-      'test.property': {
-        field: 'test'
-      }
-    }
+    'test': { 'property': 'test' }
+    => 'test.property': { field: 'test' }
   ###
   _normalizeSchema: (schema) =>
     schema = @_convertKeysToDotStrings(schema)
@@ -719,7 +715,7 @@ module.exports = class ResourceSchema
       next Boom.wrap err
 
   ###
-  When doing PUT or POST requests, if an optional field is on the resource, attach
+  When doing PUT or POST requests, if optional fields are on the resource, attach
   it to the $add query. The resource should be returned in the same format it was posted.
   ###
   _extendQueryWithImplicitOptionalFields: (resources, requestContext) ->
@@ -729,3 +725,8 @@ module.exports = class ResourceSchema
     for own resourceField, config of @schema when config.optional
       if dot.get(resource, resourceField) isnt undefined
         req.query.$add.push(resourceField)
+
+  _handleRequestError: (err, requestContext) ->
+    {req, res, next} = requestContext
+    return next Boom.badRequest(err.message) if err.name in ['CastError', 'ValidationError']
+    next Boom.wrap(err)
