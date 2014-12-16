@@ -46,10 +46,11 @@ module.exports = class ResourceSchema
       modelQuery = @Model.findOne(query)
       modelQuery.select(select) if select?
       modelQuery.lean()
-      modelQuery.exec (err, model) =>
-        return next Boom.wrap(err) if err
+      modelQuery.exec().then (model) =>
         return next Boom.notFound("No resources found with #{paramId} of #{idValue}") if not model?
         @_sendResource(model, requestContext)
+      .then null, (err) =>
+        next Boom.wrap(err) if err
 
   _getMany: (req, res, next) =>
     requestContext = {req, res, next}
@@ -75,7 +76,7 @@ module.exports = class ResourceSchema
       d.promise
     .then (models) =>
       @_sendResources(models, requestContext)
-    .catch (err) =>
+    .then null, (err) =>
       next Boom.wrap(err)
 
   ###
@@ -113,7 +114,7 @@ module.exports = class ResourceSchema
     .then (modelSaved) =>
       res.status(201)
       @_sendResource(model, requestContext)
-    .catch (err) ->
+    .then null, (err) ->
       next Boom.wrap(err)
 
   _postMany: (req, res, next) ->
@@ -142,7 +143,7 @@ module.exports = class ResourceSchema
     .then (modelsSaved) =>
       res.status(201)
       @_sendResources(modelsSaved, requestContext)
-    .catch (err) =>
+    .then null, (err) =>
       next Boom.wrap(err)
 
   ###
@@ -183,7 +184,7 @@ module.exports = class ResourceSchema
         return next Boom.notFound() if not model?
         res.status(200)
         @_sendResource(model, requestContext)
-      .catch (err) =>
+      .then null, (err) =>
         next Boom.wrap(err)
 
   _putMany: (req, res, next) =>
@@ -215,7 +216,7 @@ module.exports = class ResourceSchema
       q.all(savePromises)
     .then (updatedModels) =>
       @_sendResources(updatedModels, requestContext)
-    .catch (err) ->
+    .then null, (err) ->
       next Boom.wrap(err)
 
   ###
@@ -690,12 +691,11 @@ module.exports = class ResourceSchema
     resource = @_createResourceFromModel(model, requestContext)
     resourceByModelId = {}
     resourceByModelId[model._id.toString()] = resource
-    builtContext = @_buildContext(requestContext, [resource], [model])
-    builtContext.then =>
+    @_buildContext(requestContext, [resource], [model]).then =>
       @_applyGetters(resourceByModelId, [model], requestContext)
       res.body = resource
       next()
-    builtContext.catch (err) ->
+    .then null, (err) ->
       next Boom.wrap err
 
   _sendResources: (models, requestContext) ->
@@ -709,15 +709,14 @@ module.exports = class ResourceSchema
       resourceByModelId[model._id.toString()] = resource
       resource
 
-    @_buildContext(requestContext, resources, models)
-      .then =>
-        @_applyGetters(resourceByModelId, models, requestContext)
-        @_applyFilters(resources, requestContext)
-      .then (resources) =>
-        res.body = resources
-        next()
-      .catch (err) ->
-        next Boom.wrap err
+    @_buildContext(requestContext, resources, models).then =>
+      @_applyGetters(resourceByModelId, models, requestContext)
+      @_applyFilters(resources, requestContext)
+    .then (resources) =>
+      res.body = resources
+      next()
+    .then null, (err) ->
+      next Boom.wrap err
 
   ###
   When doing PUT or POST requests, if an optional field is on the resource, attach
