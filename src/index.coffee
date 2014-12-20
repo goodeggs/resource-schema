@@ -187,6 +187,7 @@ module.exports = class ResourceSchema
     requestContext = {req, res, next}
     resources = req.body
     return next Boom.badRequest "PUT must have a req.body" if not resources?
+    return next Boom.badRequest 'Cannot bulk PUT an empty array' if not resources.length
     return if not @_enforceValidity(req.query, requestContext)
     return if not @_enforceValidity(req.body, requestContext)
     for resource in resources
