@@ -4,7 +4,7 @@ q = require 'q'
 clone = require 'clone'
 deepExtend = require './deep_extend'
 mongoose = require 'mongoose'
-Boom = require 'boom'
+boom = require 'boom'
 
 RESERVED_KEYWORDS = require './reserved_keywords'
 
@@ -41,13 +41,13 @@ module.exports = class ResourceSchema
       try
         query = @_convertTypes(query)
       catch err
-        return next Boom.wrap err
+        return next boom.wrap err
 
       modelQuery = @Model.findOne(query)
       modelQuery.select(select) if select?
       modelQuery.lean()
       modelQuery.exec().then (model) =>
-        return next Boom.notFound("No resources found with #{paramId} of #{idValue}") if not model?
+        return next boom.notFound("No resources found with #{paramId} of #{idValue}") if not model?
         @_sendResource(model, requestContext)
       .then null, (err) =>
         @_handleRequestError(err, requestContext)
@@ -84,7 +84,7 @@ module.exports = class ResourceSchema
     (req, res, next) =>
       requestContext = {req, res, next}
       resource = req.body
-      return next Boom.badRequest "POST must have a req.body" if not resource?
+      return next boom.badRequest "POST must have a req.body" if not resource?
       return if not @_enforceValidity(req.query, requestContext)
 
       if Array.isArray req.body
@@ -117,7 +117,7 @@ module.exports = class ResourceSchema
     requestContext = {req, res, next}
     resources = req.body
 
-    return next Boom.badRequest 'Cannot bulk POST an empty array' if not resources.length
+    return next boom.badRequest 'Cannot bulk POST an empty array' if not resources.length
 
     for resource in resources
       return if not @_enforceValidity(resource, requestContext)
@@ -135,7 +135,7 @@ module.exports = class ResourceSchema
       @_applySetters(resourceByModelId, models, requestContext)
       # use node resolver b/c q does not pass splat arguments
       @Model.create models, (err, modelsSaved...) ->
-        d.reject(Boom.wrap err) if err
+        d.reject(boom.wrap err) if err
         d.resolve(modelsSaved)
       d.promise
     .then (modelsSaved) =>
@@ -157,7 +157,7 @@ module.exports = class ResourceSchema
     (req, res, next) =>
       requestContext = {req, res, next}
       resource = req.body
-      return next Boom.badRequest "PUT must have a req.body" if not resource?
+      return next boom.badRequest "PUT must have a req.body" if not resource?
       return if not @_enforceValidity(req.query, requestContext)
       return if not @_enforceValidity(req.body, requestContext)
 
@@ -177,7 +177,7 @@ module.exports = class ResourceSchema
         delete model._id
         @Model.findOneAndUpdate(query, model, {upsert: true}).lean().exec()
       .then (model) =>
-        return next Boom.notFound() if not model?
+        return next boom.notFound() if not model?
         res.status(200)
         @_sendResource(model, requestContext)
       .then null, (err) =>
@@ -186,8 +186,8 @@ module.exports = class ResourceSchema
   _putMany: (req, res, next) =>
     requestContext = {req, res, next}
     resources = req.body
-    return next Boom.badRequest "PUT must have a req.body" if not resources?
-    return next Boom.badRequest 'Cannot bulk PUT an empty array' if not resources.length
+    return next boom.badRequest "PUT must have a req.body" if not resources?
+    return next boom.badRequest 'Cannot bulk PUT an empty array' if not resources.length
     return if not @_enforceValidity(req.query, requestContext)
     return if not @_enforceValidity(req.body, requestContext)
     for resource in resources
@@ -206,7 +206,7 @@ module.exports = class ResourceSchema
       savePromises = models.map (model) =>
         d = q.defer()
         modelId = model._id
-        throw Boom.badRequest('_id required to update') if not modelId
+        throw boom.badRequest('_id required to update') if not modelId
         delete model._id
         @Model.findByIdAndUpdate(modelId, model, {upsert: true}).lean().exec(d.makeNodeResolver())
         d.promise
@@ -229,8 +229,8 @@ module.exports = class ResourceSchema
       query[paramId] = idValue
 
       @Model.findOneAndRemove(query).exec (err, removedInstance) =>
-        return next Boom.wrap(err) if err
-        return next Boom.notFound("Resource with id #{idValue} not found from #{@Model.modelName} collection") if not removedInstance?
+        return next boom.wrap(err) if err
+        return next boom.notFound("Resource with id #{idValue} not found from #{@Model.modelName} collection") if not removedInstance?
         res.status(204)
         res.body = "Resource with id #{idValue} successfully deleted from #{@Model.modelName} collection"
         next()
@@ -257,7 +257,7 @@ module.exports = class ResourceSchema
       resourceQuery = @_getResourceQuery requestQuery
     catch err
       deferred = q.defer()
-      deferred.reject Boom.wrap err
+      deferred.reject boom.wrap err
       return deferred.promise
 
     for resourceField, value of resourceQuery
@@ -267,7 +267,7 @@ module.exports = class ResourceSchema
           query = @schema[resourceField].find value, {req, res, next}
         catch err
           deferred = q.defer()
-          deferred.reject Boom.wrap err
+          deferred.reject boom.wrap err
           return deferred.promise
         deepExtend(modelQuery, query)
 
@@ -276,7 +276,7 @@ module.exports = class ResourceSchema
         do =>
           d = q.defer()
           @schema[resourceField].findAsync value, {req, res, next}, (err, query) =>
-            return d.reject Boom.wrap err if err
+            return d.reject boom.wrap err if err
             deepExtend(modelQuery, query)
             d.resolve()
           queryPromises.push(d.promise)
@@ -556,10 +556,10 @@ module.exports = class ResourceSchema
     validateValue = (key, value) =>
       if @schema[key]?.validate
         if not @schema[key].validate(value)
-          throw Boom.badRequest "'#{key}' is invalid"
+          throw boom.badRequest "'#{key}' is invalid"
       if @schema[key]?.match
         if not @schema[key].match.test(value)
-          throw Boom.badRequest "'#{key}' is invalid"
+          throw boom.badRequest "'#{key}' is invalid"
       true
 
     normalizedObj = @_convertKeysToDotStrings(obj)
@@ -584,11 +584,11 @@ module.exports = class ResourceSchema
   - Boolean
   - mongoose.Types.ObjectId and other newable objects
 
-  @throws a Boom http exception if any of the supplied values are invalid
+  @throws a boom http exception if any of the supplied values are invalid
   ###
   _convertTypes: (obj) ->
     badRequest = (type, key, value) =>
-      Boom.badRequest "'#{value}' is an invalid #{type} for field '#{key}'"
+      boom.badRequest "'#{value}' is an invalid #{type} for field '#{key}'"
 
     convert = (key, value) =>
       switch @schema[key].type
@@ -657,7 +657,7 @@ module.exports = class ResourceSchema
         d = q.defer()
         resolveMethod requestContext, (err, result) ->
           if err
-            d.reject Boom.wrap(err)
+            d.reject boom.wrap(err)
           else
             requestContext[resolveVar] = result
             d.resolve()
@@ -676,7 +676,7 @@ module.exports = class ResourceSchema
           d = q.defer()
           resolveMethod requestContext, (err, result) ->
             if err
-              d.reject Boom.wrap(err)
+              d.reject boom.wrap(err)
             else
               requestContext[resolveVar] = result
               d.resolve()
@@ -695,7 +695,7 @@ module.exports = class ResourceSchema
       res.body = resource
       next()
     .then null, (err) ->
-      next Boom.wrap err
+      next boom.wrap err
 
   _sendResources: (models, requestContext) ->
     {req, res, next} = requestContext
@@ -715,7 +715,7 @@ module.exports = class ResourceSchema
       res.body = resources
       next()
     .then null, (err) ->
-      next Boom.wrap err
+      next boom.wrap err
 
   ###
   When doing PUT or POST requests, if optional fields are on the resource, attach
@@ -731,5 +731,5 @@ module.exports = class ResourceSchema
 
   _handleRequestError: (err, requestContext) ->
     {req, res, next} = requestContext
-    return next Boom.badRequest(err.message) if err.name in ['CastError', 'ValidationError']
-    next Boom.wrap(err)
+    return next boom.badRequest(err.message) if err.name in ['CastError', 'ValidationError']
+    next boom.wrap(err)
