@@ -34,16 +34,18 @@ suite 'POST many', ({withModel, withServer}) ->
   it 'returns the saved resources', fibrous ->
     expect(@response.statusCode).to.equal 201
     expect(@response.body.length).to.equal 3
-    expect(@response.body[0].name).to.equal 'apples'
+    savedNames = @response.body.map (m) -> m.name
+    expect(savedNames).to.contain 'apples'
+    expect(savedNames).to.contain 'pears'
+    expect(savedNames).to.contain 'oranges'
     expect(@response.body[0]._id).to.be.ok
-    expect(@response.body[1].name).to.equal 'pears'
     expect(@response.body[1]._id).to.be.ok
-    expect(@response.body[2].name).to.equal 'oranges'
     expect(@response.body[2]._id).to.be.ok
 
   it 'saves the models to the DB', fibrous ->
     modelsFound = @model.sync.find()
     expect(modelsFound.length).to.equal 3
-    expect(modelsFound[0].name).to.equal 'apples'
-    expect(modelsFound[1].name).to.equal 'pears'
-    expect(modelsFound[2].name).to.equal 'oranges'
+    savedNames = modelsFound.map (m) -> m.name
+    expect(savedNames).to.contain 'apples'
+    expect(savedNames).to.contain 'pears'
+    expect(savedNames).to.contain 'oranges'
