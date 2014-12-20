@@ -45,6 +45,21 @@ suite 'GET many', ({withModel, withServer}) ->
         error: 'Bad Request'
         message: "'badId' is an invalid ObjectId for field '_id'"
 
+  describe 'default limit', ->
+    withModel (mongoose) ->
+      mongoose.Schema name: String
+
+    beforeEach ->
+      @resource = new ResourceSchema @model
+
+    withServer (app) ->
+      app.get '/res/', @resource.get(), @resource.send
+      app
+
+    it 'sets a default limit of 1000', fibrous ->
+      [0...1050].forEach (i) => @model.sync.create name: "model_#{i}"
+      response = @request.sync.get '/res/'
+      expect(response.body.length).to.equal 1000
 
   describe 'optional: [Boolean]', ->
     before fibrous ->

@@ -369,12 +369,12 @@ module.exports = class ResourceSchema
     groupQuery
 
   ###
-  Get value to use for limiting query results
+  Get value to use for limiting query results. Defaults to 10000
   @param [Object] query - query params from client
   @returns [Number] Max number of resources to return in response
   ###
   _getLimit: (query) =>
-    query.$limit or @options.defaultLimit or 0
+    query.$limit or @options.defaultLimit or 1000
 
   ###
   Get resource fields that will be returned with this request. Reject everything
