@@ -67,6 +67,6 @@ suite 'POST many', ({withModel, withServer}) ->
       [0..10].forEach => @model.sync.create name: 'bam'
       @response = @request.sync.post "/res", json: []
 
-    it '400s', ->
-      expect(@response.statusCode).to.equal 400
-      expect(@response.body.message).to.equal 'Cannot bulk POST an empty array'
+    it '200s with an empty array', ->
+      expect(@response.statusCode).to.equal 200
+      expect(@response.body).to.deep.equal []

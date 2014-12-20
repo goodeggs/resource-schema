@@ -117,7 +117,9 @@ module.exports = class ResourceSchema
     requestContext = {req, res, next}
     resources = req.body
 
-    return next boom.badRequest 'Cannot bulk POST an empty array' if not resources.length
+    if not resources.length
+      res.body = []
+      return next()
 
     for resource in resources
       return if not @_enforceValidity(resource, requestContext)
@@ -187,7 +189,9 @@ module.exports = class ResourceSchema
     requestContext = {req, res, next}
     resources = req.body
     return next boom.badRequest "PUT must have a req.body" if not resources?
-    return next boom.badRequest 'Cannot bulk PUT an empty array' if not resources.length
+    if not resources.length
+      res.body = []
+      return next()
     return if not @_enforceValidity(req.query, requestContext)
     return if not @_enforceValidity(req.body, requestContext)
     for resource in resources
