@@ -117,6 +117,8 @@ module.exports = class ResourceSchema
     requestContext = {req, res, next}
     resources = req.body
 
+    return next Boom.badRequest 'Cannot bulk POST an empty array' if not resources.length
+
     for resource in resources
       return if not @_enforceValidity(resource, requestContext)
 
