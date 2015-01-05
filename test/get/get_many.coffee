@@ -104,6 +104,31 @@ suite 'GET many', ({withModel, withServer}) ->
       expect(response.body[0].productCount).to.be.undefined
       expect(response.body[1].productCount).to.be.undefined
 
+
+  describe 'default filter', ->
+    withModel (mongoose) ->
+      mongoose.Schema name: String
+
+    beforeEach fibrous ->
+      @model.sync.create name: 'hello'
+      @model.sync.create name: 'bad'
+      @model.sync.create name: 'goodbye'
+
+      @resource = new ResourceSchema @model, {'name'},
+        filter: (documents) ->
+          documents.filter ({name}) ->
+            name isnt 'bad'
+
+    withServer (app) ->
+      app.get '/res', @resource.get(), @resource.send
+
+    it 'filters out unwanted documents by default', fibrous ->
+      response = @request.sync.get '/res'
+      expect(response.body).to.deep.equal [
+        {name: 'hello'}
+        {name: 'goodbye'}
+      ]
+
   describe 'filter: [Function]', ->
     before fibrous ->
       Model.sync.remove()
