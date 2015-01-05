@@ -640,6 +640,8 @@ module.exports = class ResourceSchema
     for resourceField, value of resourceQuery
       if typeof @schema[resourceField].filter is 'function'
         resources = @schema[resourceField].filter value, resources, {req, res, next, models}
+    if typeof @options.filter is 'function'
+      resources = @options.filter resources, {req, res, next, models}
     resources
 
   ###
