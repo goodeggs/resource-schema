@@ -39,7 +39,7 @@ module.exports = class ResourceSchema
       query = {}
       query[paramId] = idValue
       try
-        query = @_convertTypes(query)
+        @_convertTypes(query)
       catch err
         return next boom.wrap err
 
@@ -519,7 +519,7 @@ module.exports = class ResourceSchema
   ###
   Convert resource schema to standard format for easier manipulation
   - converts all keys to dot strings
-  - Adds field, if using implicit model field syntax
+  - Adds 'field' key, if using shorthand syntax
   @example
     'test': { 'property': 'test' }
     => 'test.property': { field: 'test' }
@@ -631,6 +631,8 @@ module.exports = class ResourceSchema
           obj[key][i] = convert(key, v)
       else
         obj[key] = convert(key, value)
+
+    obj
 
   ###
   Filter down resources with all filter queryParams
