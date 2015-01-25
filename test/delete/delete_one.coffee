@@ -1,28 +1,25 @@
-sinon = require 'sinon'
 fibrous = require 'fibrous'
 mongoose = require 'mongoose'
-Model = require '../fixtures/model.coffee'
-ParentModel = require '../fixtures/parent_model.coffee'
 expect = require('chai').expect
-request = require 'request'
-require '../support/bootstrap'
+{suite, given} = require '../support/helpers'
+ResourceSchema = require '../..'
 
-MongooseResource = require '../..'
+suite 'DELETE one', ({withModel, withServer}) ->
+  withModel (mongoose) ->
+    mongoose.Schema name: String
 
-{response, model} = {}
+  beforeEach fibrous ->
+    schema = { '_id', 'name' }
+    @resource = new ResourceSchema @model, schema
+    @fruit = @model.sync.create name: 'banana'
 
-describe 'DELETE one', ->
-  {model} = {}
-  describe 'no params', ->
-    before fibrous ->
-      Model.sync.remove()
-      model = Model.sync.create name: 'test'
+  withServer (app) ->
+    app.delete '/fruits/:_id', @resource.delete('_id'), @resource.send
+    app
 
-    it 'returns 204 if successful', fibrous ->
-      response = request.sync.del
-        url: "http://127.0.0.1:4000/resource/#{model._id}"
-        json: true
-      expect(response.statusCode).to.equal 204
-
-    it 'removes the instance from the database', fibrous ->
-      expect(Model.sync.count()).to.equal 0
+  it 'returns the saved resources', fibrous ->
+    @response = @request.sync.del
+      url: "/fruits/#{@fruit._id}"
+      json: true
+    expect(@response.statusCode).to.equal 204
+    expect(@model.sync.count()).to.equal 0

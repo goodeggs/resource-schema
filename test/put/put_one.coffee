@@ -1,16 +1,10 @@
-sinon = require 'sinon'
 fibrous = require 'fibrous'
 mongoose = require 'mongoose'
-Model = require '../fixtures/model.coffee'
 expect = require('chai').expect
-request = require 'request'
 mongoose = require 'mongoose'
 {suite, given} = require '../support/helpers'
 
-MongooseResource = require '../..'
 ResourceSchema = require '../..'
-
-{response, model} = {}
 
 suite 'PUT one', ({withModel, withServer}) ->
   given 'updating model values', ->

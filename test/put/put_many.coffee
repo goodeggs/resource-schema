@@ -1,18 +1,9 @@
-sinon = require 'sinon'
 fibrous = require 'fibrous'
 mongoose = require 'mongoose'
-Model = require '../fixtures/model'
-ModelCustomKey = require '../fixtures/model_custom_key'
-ParentModel = require '../fixtures/parent_model'
 expect = require('chai').expect
-request = require 'request'
-require '../support/bootstrap'
 {suite, given} = require '../support/helpers'
 
 ResourceSchema = require '../..'
-MongooseResource = require '../..'
-
-{response, model} = {}
 
 suite 'PUT many', ({withModel, withServer}) ->
   given 'valid request', ->

@@ -1,14 +1,9 @@
-sinon = require 'sinon'
 fibrous = require 'fibrous'
 mongoose = require 'mongoose'
-Model = require '../fixtures/model.coffee'
 expect = require('chai').expect
-request = require 'request'
 {suite, given} = require '../support/helpers'
 
 ResourceSchema = require '../..'
-
-{response, model} = {}
 
 suite 'POST one', ({withModel, withServer}) ->
   withModel (mongoose) ->

@@ -1,12 +1,8 @@
 {suite, given} = require '../support/helpers'
-sinon = require 'sinon'
 fibrous = require 'fibrous'
 mongoose = require 'mongoose'
-Model = require '../fixtures/model.coffee'
-ParentModel = require '../fixtures/parent_model.coffee'
 expect = require('chai').expect
-request = require 'request'
-require '../support/bootstrap'
+sinon = require 'sinon'
 
 ResourceSchema = require '../..'
 
