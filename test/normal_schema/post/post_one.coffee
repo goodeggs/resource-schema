@@ -1,9 +1,9 @@
 fibrous = require 'fibrous'
 mongoose = require 'mongoose'
 expect = require('chai').expect
-{suite, given} = require '../support/helpers'
+{suite, given} = require '../../support/helpers'
 
-ResourceSchema = require '../..'
+ResourceSchema = require '../../..'
 
 suite 'POST one', ({withModel, withServer}) ->
   withModel (mongoose) ->

@@ -2,9 +2,9 @@ fibrous = require 'fibrous'
 mongoose = require 'mongoose'
 expect = require('chai').expect
 mongoose = require 'mongoose'
-{suite, given} = require '../support/helpers'
+{suite, given} = require '../../support/helpers'
 
-ResourceSchema = require '../..'
+ResourceSchema = require '../../..'
 
 suite 'PUT one', ({withModel, withServer}) ->
   given 'updating model values', ->

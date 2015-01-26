@@ -1,10 +1,10 @@
-{suite, given} = require '../support/helpers'
+{suite, given} = require '../../support/helpers'
 fibrous = require 'fibrous'
 mongoose = require 'mongoose'
 expect = require('chai').expect
 sinon = require 'sinon'
 
-ResourceSchema = require '../..'
+ResourceSchema = require '../../..'
 
 suite 'GET one', ({withModel, withServer}) ->
   given 'no params', ->

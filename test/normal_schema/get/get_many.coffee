@@ -1,8 +1,8 @@
 fibrous = require 'fibrous'
 mongoose = require 'mongoose'
 expect = require('chai').expect
-{suite, given} = require '../support/helpers'
-ResourceSchema = require '../..'
+{suite, given} = require '../../support/helpers'
+ResourceSchema = require '../../..'
 
 suite 'GET many', ({withModel, withServer}) ->
   describe 'basic schema', ->
