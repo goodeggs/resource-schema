@@ -11,7 +11,7 @@ Define schemas for RESTful resources from mongoose models, and generate express 
 - [Install](#install)
 - [Creating a Resource](#creating-a-resource)
 - [Defining a Schema](#defining-a-schema)
-- [options](#options)
+- [Options](#options)
 - [Generating Middleware](#generating-middleware)
 - [Query Parameters](#query-parameters)
 - [Contributing](#contributing)
@@ -285,7 +285,7 @@ schema = {
 }
 ```
 
-## options
+## Options
 
 Options allow you to make configurations for the entire resource.
 
