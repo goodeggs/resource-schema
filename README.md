@@ -3,191 +3,207 @@
 [![NPM version](https://badge.fury.io/js/resource-schema.png)](http://badge.fury.io/js/resource-schema)
 [![Build Status](https://travis-ci.org/goodeggs/mongoose-resource.png)](https://travis-ci.org/goodeggs/resource-schema)
 
-Define schemas for RESTful resources from mongoose models, and generate express middleware to GET, POST, PUT, and DELETE to those resources.
-
-## Table of Contents
-
-[Why ResourceSchema]()
+Define schemas for RESTful resources from mongoose models, and generate express middleware to GET, POST, PUT, and DELETE to those resources.ß
 
 ## Why ResourceSchema?
 
 ResourceSchema allows you to define complex RESTful resources in a simple and declarative way.
 
-## Example
+```javascript
+Product = require './models/product'
 
-```coffeescript
-schema = {
-  '_id': '_id'
+var schema = {
+  '_id': '_id',
 
-  # Get resource field 'name' from model field 'name'
-  # Convert the name to lowercase whenever saved
-  'name':
-    field: 'name'
-    set: (productResource) -> productResource.name.toLowerCase()
+  // Get resource field 'name' from model field 'name'
+  // Convert the name to lowercase whenever saved
+  'name': {
+    field: 'name',
+    set: function (productResource) { return productResource.name.toLowerCase(); }
+  },
 
-  # make sure the day matches the specified format before saving
-  'day':
-    field: 'day'
+  // make sure the day matches the specified format before saving
+  'day': {
+    field: 'day',
     match: /[0-9]{4}-[0-9]{2}-[0-9]{2}/
+  },
 
-  # Model field 'active' renamed to resource field 'isActive'
-  'isActive': 'active'
+  // Model field 'active' renamed to resource field 'isActive'
+  'isActive': 'active',
 
-  # Dynamically get field 'code' whenever the resource is requested:
-  'code':
-    get: (model) -> model.letter + model.number
+  // Dynamically get field 'code' whenever the resource is requested:
+  'code': {
+    get: function (productModel) { productModel.letter + productModel.number }
+  },
 
-  # Dynamically get totalQuantitySold whenever the resource is requested.
-  # Resolve 'totalQuantitySoldByProductId' before applying the getter.
-  'totalQuantitySold':
-    resolve:
-      totalQuantitySoldByProductId: ({models}, done) ->
+  // Dynamically get totalQuantitySold whenever the resource is requested.
+  // Resolve 'totalQuantitySoldByProductId' before applying the getter.
+  'totalQuantitySold': {
+    resolve: {
+      totalQuantitySoldByProductId: function ({models}, done) {
         getTotalQuantitySoldById(models, done)
-    get: (productModel, {totalQuantitySoldByProductId}) ->
+      }
+    },
+    get: function (productModel, {totalQuantitySoldByProductId}) {
       totalQuantitySoldByProductId[productModel._id]
-}
+    }
+  }
 
-queryParams =
-  # query for products sold on the specified days
-  # e.g. api/products?soldOn=2014-10-01&soldOn=2014-10-05
-  'soldOn':
-    type: String
-    isArray: true
-    match: /[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/
-    find: (days) -> { 'day': $in: days }
+  // field soldOn allows you to query for products sold on the specified days
+  // e.g. api/products?soldOn=2014-10-01&soldOn=2014-10-05
+  'soldOn': {
+    type: String,
+    isArray: true,
+    match: /[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/,
+    find: function (days) { return { 'day': $in: days } }
+  },
 
-  # query for products sold in the last week
-  # e.g. api/products?fromLastWeek=true
-  'fromLastWeek':
-    type: Boolean
+  // field fromLastWeek allows you to query for products sold in the last week
+  // e.g. api/products?fromLastWeek=true
+  'fromLastWeek': {
+    type: Boolean,
     find: (days) -> { 'day': $gt: '2014-10-12' }
+  }
+};
 
-resource = ResourceSchema(Product, schema, {queryParams})
+var resource = new ResourceSchema(Product, schema);
 
-# generate express middleware that automatically handles GET, POST, PUT, and DELETE requests:
-app.get '/products', resource.get(), resource.send
-app.post '/products', resource.post(), resource.send
-app.put 'products/:_id', resource.put('_id'), resource.send
-app.get 'products/:_id', resource.get('_id'), resource.send
-app.delete 'products/:_id', resource.delete('_id'), resource.send
+// generate express middleware that automatically handles GET, POST, PUT, and DELETE requests:
+app.get('/products', resource.get(), resource.send);
+app.post('/products', resource.post(), resource.send);
+app.put('products/:_id', resource.put('_id'), resource.send);
+app.get('products/:_id', resource.get('_id'), resource.send);
+app.delete('products/:_id', resource.delete('_id'), resource.send);
 ```
 This abstracts away a lot of the boilerplate such as building queries, validating values, and handling errors, and allows you to focus on higher-level resource design.
 
-## Generating Middleware
+This provides a layer of abstraction which helps decouple your server from your client.
 
-Once you have defined a new resource, call get, post, put, or delete to generate the appropriate middleware to handle the request.
-
-``` coffeescript
-resource = new ResourceSchema(Model, schema, options)
-app.get '/products', resource.get(), (req, res, next) ->
-  # resources are on res.body
+## Install
 ```
-the middleware will attach the resources to res.body, which can then be used by other pieces of middleware, or  sent immediately back to the client
-
-### resource.get()
-
-Generate middleware to handle GET requests for multiple resources.
-
-### resource.post()
-
-Generate middleware to handle POST requests to a resource.
-
-### resource.put()
-
-Generate middleware to handle PUT requests to a resource.
-
-### resource.delete()
-
-Generate middleware to handle DELETE requests to a resource.
-
-### resource.send
-
-Convenience method for sending the resource back to the client.
-
-``` coffeescript
-resource = new ResourceSchema(Model, schema, options)
-app.get '/products', resource.get(), resource.send
+npm install resource-schema --save
 ```
+## Creating a Resource
 
-## Defining a schema
+### new ResourceSchema(model, [schema], [options])
 
-### field: [String]
-Maps a mongoose model field to a resource field.
+- **model** - mongoose model to generate the resource from
+- **[schema]** - optional object to configure custom resource fields. If no schema is provided, the resource schema is automatically generated from the model schema.
+- **[options]** - optional object to configure schema options, like document limits and default mongoose queries.
 
-``` coffeescript
+## Defining a Schema
+
+The schema allows you to customize your resource fields to look different than your model fields. If you do not provide a schema, the resource will look exactly like the model.
+
+Like a mongoose schema, the resource schema defines the shape of your resource.
+
+We can define the schema using these properties:
+
+- **field** - string that maps a resource field to a mongoose model field.
+- **get** - function that dynamically gets the value whenever a resource is requested.
+- **set** - function that dynamically sets the value whenever a resource is PUT or POSTed
+- **resolve** - TODO
+- **find** - function that dynamically builds a mongoose query whenever querying by this field
+- **findAsync** - TODO asynchronous version of find
+- **optional** - do not include this field in the resource unless specifically requested with the $add query parameter
+- **validate** - function that validates the field before saving or updating
+- **match** - regexp to validate field before saving
+- **type** - convert the type of the field before saving/querying. This is especially for converting query parameters, which default to a string.
+- **isArray** - convert value to array before saving/querying. This is especially for converting query parameters, which will not be an array of only querying by on value.
+
+
+### field: String
+Maps a resource field to a mongoose model field.
+
+``` javascript
 schema = {
-  'name': { $field: 'name' }
+  'name': { field: 'name' }
 }
 ```
 We can also define this with a shorthand notation:
-``` coffeescript
+``` javascript
 schema = {
   'name': 'name'
 }
 ```
 Or even simpler with coffeescript:
-``` coffeescript
+``` javascript
 schema = {
   'name'
 }
 ```
-Note, this can be used to rename a model field to a new name on the resource:
-``` coffeescript
+
+Note, this can be used to rename a model field to a new field on the resource:
+``` javascript
 schema = {
   'category.name': 'categoryName'
 }
-# => {
-#  category: {
-#    name: 'value'
-#  }
-# }
+// => {
+//  category: {
+//    name: 'value'
+//  }
+// }
 ```
 
-### get: (resource, context) ->
+### get: function(model, context)
 
-Dynamically get the value whenever a resource is requested. Note, you need to explicitly set the value on each resource
+- **model** - corresponding mongoose model for requested resource
+- **context** - object containing req, res, next, and resolved values (see "resolve" for details)
 
-``` coffeescript
-schema =
-  'fullName':
-    get: (resource, {req, res, next}) ->
+Dynamically get the value whenever a resource is requested.
+
+``` javascript
+var schema = {
+  'fullName': {
+    get: function (resource, context) {
       resource.firtName + ' ' + resource.lastName
+    }
+  }
+}
 ```
 
-### set: (model, context) ->
+### set: function(resource, context)
 
-Dynamically set the value whenever a resource is saved or updated
+- **resource** - resource saved by client
+- **context** - object containing req, res, next, and resolved values (see "resolve" for details)
 
-``` coffeescript
-schema = {
+Function that dynamically sets the value whenever a resource is saved or updated.
+
+``` javascript
+var schema = {
   'name': {
-    set: (model, {req, res, next}) ->
-      model.name.toLowerCase()
+    set: function (resource, context) {
+      return resource.name.toLowerCase()
+    }
   }
 }
 ```
 
-### find: (queryValue, context) ->
+### find: function(value, context)
 
-Dynamically find resources with the provided query value. Return an object that will extend the mongoose query. $find is used to define query parameters.
+- **value** - value of query parameter from client
+- **context** - object containing req, res, next, and resolved values (see "resolve" for details)
 
-``` coffeescript
-schema = {
+Function that dynamically builds a mongoose query whenever querying by this field. Return an object that will extend the mongoose query.
+
+``` javascript
+var schema = {
   'soldOn': {
-    find: (days, {req, res, next}) ->
-      { 'day': $in: days }
+    find: function (days, context) {
+      return { 'day': $in: days }
+    }
   }
 }
 ```
 
-### optional: [Boolean]
+### optional: Boolean
 
-If true, do not include the value in the resource unless specifically requested by the client with the '$add' query parameter
+If true, do not include this field in the resource unless specifically requested with the $add query parameter
 
-``` coffeescript
-# GET /api/products?$add=name
+``` javascript
+// GET /api/products?$add=name
 
-schema = {
+var schema = {
   'name': {
     optional: true
     field: 'name'
@@ -196,32 +212,35 @@ schema = {
 
 ```
 
-### validate: (value) ->
+### validate: function(value)
+
+- **value** - value of query parameter from client, or value on object
 
 Return a 400 invalid request if the provided value does not pass the validation test.
 
-``` coffeescript
-schema = {
+``` javascript
+var schema = {
   'date': {
-    validate: (value) ->
-      /[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/.test(value)
+    validate: function(value) {
+      return /[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/.test(value)
+    }
   }
 }
 ```
 
-### match: [RegExp]
+### match: RegExp
 
 Return a 400 invalid request if the provided value does match the given regular expression.
 
-``` coffeescript
-schema = {
+``` javascript
+var schema = {
   'date': {
     match: /[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/
   }
 }
 ```
 
-### type: [Object]
+### type: Object
 
 Convert the type of the value.
 
@@ -233,7 +252,7 @@ Valid types include
 - Boolean
 - and any other "newable" class
 
-``` coffeescript
+``` javascript
 schema = {
   'active': {
     type: Boolean
@@ -242,75 +261,227 @@ schema = {
 ```
 This is especially useful for query parameters, which are a string by default
 
-### isArray: [Boolean]
+### isArray: Boolean
 
-Ensure that the query parameter is an Array.
+Convert value to array before saving/querying. This is especially for converting query parameters, which will not be an array of only querying by on value.
 
-``` coffeescript
+``` javascript
 schema = {
   'daysToSelect': {
-    isArray: Boolean
-    find: (days, context, done) -> ...
+    isArray: true
+    find: function(days, context) { ... }
   }
 }
 ```
 
 ## options
 
-### options.defaultLimit
+Options allow you to make configurations for the entire resource.
 
-Set the default number of the resources that will be sent for GET requests.
+### filter: function(models)
 
-``` coffeescript
-new ResourceSchema(Product, schema, {
+- **models** - all models found from the query
+
+Filter applied to every GET all request.
+
+``` javascript
+new ResourceSchema(Model, schema, {
+  filter: function(models) {
+    models.filter(function(model) {
+      return model.isActive
+    })
+  }
+})
+
+```
+### defaultLimit: Number
+
+Limit the number of returned documents for GET requests. Defaults to 1000.
+
+``` javascript
+new ResourceSchema(Model, schema, {
   defaultLimit: 100
 })
 
 ```
 
-### options.defaultQuery
+### defaultQuery: Object
 
 Set the default query for this resource. All other query parameters will extend this query.
 
-``` coffeescript
+``` javascript
 new ResourceSchema(Product, schema, {
   defaultQuery: {
-    active: true
+    active: true,
     createdAt: $gt: '2013-01-01'
   }
 })
 
 ```
 
-### options.queryParams
+### queryParams: Object
 
-Define query parameters for this resource using the $find method. Note that these query parameters can be defined directly on the schema, but you can define them here if you prefer (since query parameters are often not part of the resource being returned).
+Define query parameters for this resource. Note, you could define these directly on the schema, but some people prefer to separate query parameters which are not returned on the resource from fields that are on the resource.
 
-```coffeescript
-queryParams =
-  'soldOn':
-    type: String
-    isArray: true
-    match: /[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/
-    find: (days) -> { 'day': $in: days }
-  'fromLastWeek':
-    type: Boolean
-    find: (days) -> { 'day': $gt: '2014-10-12' }
+```javascript
+new ResourceSchema(Product, schema, {
+  queryParams: {
+    'soldOn': {
+      type: String,
+      isArray: true,
+      match: /[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/,
+      find: function(days) {
+        return { 'day': $in: days }
+      }
+    },
+    'fromLastWeek': {
+      type: Boolean,
+      find: function(days) {
+        return { 'day': $gt: '2014-10-12' }
+      }
+    }
+  }
+})
+
 ```
 
-## Querying the resources
+## Generating Middleware
 
-ResourceSchema automatically adds several utilities for interacting with your resources.
+Once you have defined a new resource, call get, post, put, or delete to generate the appropriate middleware to handle the request.
 
-### Querying by resource field
-
-Query by any resource field with a $field or a $find attribute.
-
+``` javascript
+var resource = new ResourceSchema(Model, schema, options);
+app.get('/products', resource.get(), function(req, res, next) {
+  # resources on res.body
+});
 ```
-GET /products?name=strawberry
-GET /products?categrory[name]=fruit
+the middleware will attach the resources to res.body, which can be used by other middleware, or sent immediately back to the client.
+
+### get()
+
+Handle GET requests for resource collection. Results can by filtered any field defined as a query parameter. Limits response to 1000 resources by default.
+
+``` javascript
+var resource = new ResourceSchema(Model, schema, options);
+app.get('/products', resource.get(), function(req, res, next) {
+  // resources on res.body
+});
+
+// GET /products?name=magicbox
 ```
-Note that you can query nested fields with Express' [bracket] notation.
+
+### get(idField)
+
+- **idField** - field to use as resource identifier. Note, this must match the field name defined on the resource and the name on req.params.
+
+Handle GET requests for single resource.
+
+``` javascript
+var resource = new ResourceSchema(Model, schema, options);
+app.get('/products/:_id', resource.get('_id'), function(req, res, next) {
+  // resources on res.body
+});
+
+// GET /products/1234
+// => {
+//  _id: 1234
+//  name: 'banana bread'
+// }
+```
+
+### post()
+
+Handle POST requests. Can take a single resource or an array of resources.
+
+``` javascript
+var resource = new ResourceSchema(Model, schema, options);
+app.post('/products', resource.post(), function(req, res, next) {
+  // resources on res.body
+});
+
+// POST /products
+// {
+//  _id: 1234
+//  name: 'banana bread'
+// }
+//
+// or
+//
+// POST /products
+// [
+//  {
+//    _id: 1234
+//    name: 'banana bread'
+//  },
+//  {
+//    _id: 4567
+//    name: 'apples'
+//  }
+// ]
+```
+
+### put(idField)
+
+- **idField** - field to use as resource identifier. Note, this must match the field name defined on the resource and the name on req.params.
+
+Generate middleware to handle PUT requests to a resource. This does an upsert, so if the resource does not exist, it will create one.
+
+This will handle bulk PUT requests as well, automatically reading the idField and upserting for each resource.
+
+``` javascript
+var resource = new ResourceSchema(Model, schema, options);
+app.put('/products/:_id', resource.put('_id'), function(req, res, next) {
+  // resources on res.body
+});
+
+// PUT /products/1234
+// {
+//  _id: 1234
+//  name: 'banana bread'
+// }
+//
+// or
+//
+// PUT /products
+// [
+//  {
+//    _id: 1234
+//    name: 'banana bread'
+//  },
+//  {
+//    _id: 4567
+//    name: 'apples'
+//  }
+// ]
+```
+
+### delete(idField)
+
+- **idField** - field to use as resource identifier. Note, this must match the field name defined on the resource and the name on req.params.
+
+Generate middleware to handle DELETE requests to a single resource.
+
+``` javascript
+var resource = new ResourceSchema(Model, schema, options);
+app.delete('/products/:_id', resource.delete('_id'), function(req, res, next) {
+  // resources on res.body
+});
+
+// DELETE /products/1234
+```
+
+### send
+
+Convenience method for sending the resources on res.body back to the client.
+
+``` javascript
+var resource = new ResourceSchema(Model, schema, options);
+app.get('/products', resource.get(), resource.send);
+```
+
+## Query Parameters
+
+ResourceSchema allows you to use a variety of query parameters to interact with your resources.
 
 ### $select
 
@@ -319,7 +490,7 @@ Select fields to return on the resource. Similar to mongoose select.
 ```
 GET /products?$select=name&$select=active
 GET /products?$select[]=name&$select[]=active
-GET /products?$select=name%20active
+GET /products?$select=name active
 ```
 
 ### $limit
@@ -332,34 +503,22 @@ GET /products?$limit=10
 
 ### $add
 
-Add an $optional field to the response. See $optional schema fields for more details.
+Add an optional field to the resource. See optional schema field for more details.
 
 ```
 GET /products?$add=quantitySold
 ```
 
-## Working with nested attributes in schemas
+### querying resource fields
 
-List just the nested attributes you care about:
+Query by any resource field with a field, find, or filter attribute.
 
-``` coffee
-'user.name'
-'user.email'
 ```
-
-Or include the root attribute to include all nested attributes:
-
-``` coffee
-'user'
+GET /products?name=strawberry
+GET /products?categrory[name]=fruit
 ```
+Note that you can query nested fields with Express' [bracket] notation.
 
-You can even add optional attributes:
-
-``` coffee
-'user'
-'user.note':
-  optional: true
-```
 
 ## Contributing
 
