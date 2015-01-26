@@ -3,7 +3,44 @@
 [![NPM version](https://badge.fury.io/js/resource-schema.png)](http://badge.fury.io/js/resource-schema)
 [![Build Status](https://travis-ci.org/goodeggs/mongoose-resource.png)](https://travis-ci.org/goodeggs/resource-schema)
 
-Define schemas for RESTful resources from mongoose models, and generate express middleware to GET, POST, PUT, and DELETE to those resources.ß
+Define schemas for RESTful resources from mongoose models, and generate express middleware to GET, POST, PUT, and DELETE to those resources.
+
+## Table of Contents
+
+- [Why ResourceSchema?](#)
+- [Install](#)
+- [Creating a Resource](#)
+	- [new ResourceSchema(model, [schema], [options])](#)
+- [Defining a Schema](#)
+	- [field: String](#)
+	- [get: function(model, context)](#)
+	- [set: function(resource, context)](#)
+	- [find: function(value, context)](#)
+	- [optional: Boolean](#)
+	- [validate: function(value)](#)
+	- [match: RegExp](#)
+	- [type: Object](#)
+	- [isArray: Boolean](#)
+- [options](#)
+	- [filter: function(models)](#)
+	- [defaultLimit: Number](#)
+	- [defaultQuery: Object](#)
+	- [queryParams: Object](#)
+- [Generating Middleware](#)
+	- [get()](#)
+	- [get(idField)](#)
+	- [post()](#)
+	- [put(idField)](#)
+	- [delete(idField)](#)
+	- [send](#)
+- [Query Parameters](#)
+	- [$select](#)
+	- [$limit](#)
+	- [$add](#)
+	- [querying resource fields](#)
+- [Contributing](#)
+- [Code of Conduct](#)
+- [License](#)
 
 ## Why ResourceSchema?
 
@@ -77,7 +114,7 @@ app.delete('products/:_id', resource.delete('_id'), resource.send);
 ```
 This abstracts away a lot of the boilerplate such as building queries, validating values, and handling errors, and allows you to focus on higher-level resource design.
 
-This provides a layer of abstraction which helps decouple your server from your client.
+Additionally, this provides a layer of abstraction which helps decouple your server models from your client.
 
 ## Install
 ```
@@ -93,9 +130,7 @@ npm install resource-schema --save
 
 ## Defining a Schema
 
-The schema allows you to customize your resource fields to look different than your model fields. If you do not provide a schema, the resource will look exactly like the model.
-
-Like a mongoose schema, the resource schema defines the shape of your resource.
+The schema allows define the shape of your resource. If you do not provide a schema, the resource will look exactly like the model.
 
 We can define the schema using these properties:
 
@@ -263,7 +298,7 @@ This is especially useful for query parameters, which are a string by default
 
 ### isArray: Boolean
 
-Convert value to array before saving/querying. This is especially for converting query parameters, which will not be an array of only querying by on value.
+Convert value to array before saving/querying. This is especially for converting query parameters, which will not be an array if only querying by on value.
 
 ``` javascript
 schema = {
@@ -282,7 +317,7 @@ Options allow you to make configurations for the entire resource.
 
 - **models** - all models found from the query
 
-Filter applied to every GET all request.
+Filter limits resources returned from every GET request.
 
 ``` javascript
 new ResourceSchema(Model, schema, {
@@ -321,7 +356,7 @@ new ResourceSchema(Product, schema, {
 
 ### queryParams: Object
 
-Define query parameters for this resource. Note, you could define these directly on the schema, but some people prefer to separate query parameters which are not returned on the resource from fields that are on the resource.
+Define query parameters for this resource. Note, you could define these directly on the schema, but some people prefer to separate query parameters from all other fields.
 
 ```javascript
 new ResourceSchema(Product, schema, {
@@ -347,7 +382,7 @@ new ResourceSchema(Product, schema, {
 
 ## Generating Middleware
 
-Once you have defined a new resource, call get, post, put, or delete to generate the appropriate middleware to handle the request.
+Once define a new resource, call .get(), .post(), .put(), or .delete() to generate the appropriate middleware to handle the request.
 
 ``` javascript
 var resource = new ResourceSchema(Model, schema, options);
@@ -355,11 +390,11 @@ app.get('/products', resource.get(), function(req, res, next) {
   # resources on res.body
 });
 ```
-the middleware will attach the resources to res.body, which can be used by other middleware, or sent immediately back to the client.
+The middleware will attach the resources to res.body, which can be used by other middleware, or sent immediately back to the client.
 
 ### get()
 
-Handle GET requests for resource collection. Results can by filtered any field defined as a query parameter. Limits response to 1000 resources by default.
+Handle bulk GET requests. Results can by filtered by query parameters. Limits response to 1000 resources by default.
 
 ``` javascript
 var resource = new ResourceSchema(Model, schema, options);
