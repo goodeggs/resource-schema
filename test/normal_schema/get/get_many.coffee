@@ -466,12 +466,20 @@ suite 'GET many', ({withModel, withServer}) ->
           expect(response.body.length).to.equal 1
           expect(response.body[0].productPrice).to.equal 27
 
-  describe 'options', ->
-    describe 'defaultQuery', ->
+  describe.only 'options', ->
+    describe 'find', ->
       withModel (mongoose) ->
         mongoose.Schema
           price: Number
           active: Boolean
+
+      withServer (app) ->
+        schema = { 'price' }
+        options = {
+          find: -> { active: true }
+        }
+        @resource = new ResourceSchema @model, schema, options
+        app.get '/products', @resource.get(), @resource.send
 
       beforeEach fibrous ->
         @model.sync.create
@@ -484,14 +492,7 @@ suite 'GET many', ({withModel, withServer}) ->
           price: 27
           active: false
 
-        schema = { 'price' }
-        options = defaultQuery: { active: true }
-        @resource = new ResourceSchema @model, schema, options
-
-      withServer (app) ->
-        app.get '/products', @resource.get(), @resource.send
-
-      it 'applies default query, if not overwritten', fibrous ->
+      it 'runs the finder for every request', fibrous ->
         response = @request.sync.get
           url: '/products',
           json: true

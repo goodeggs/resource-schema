@@ -254,7 +254,7 @@ module.exports = class ResourceSchema
     {req, res, next} = requestContext
     requestQuery = req.query
 
-    modelQuery = clone(@options.defaultQuery) or {}
+    modelQuery = @options.find?(requestContext) or {}
     queryPromises = []
 
     try
