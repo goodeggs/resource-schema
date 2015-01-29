@@ -515,20 +515,31 @@ GET /products?$limit=10
 ### $add
 
 Add an optional field to the resource. See optional schema field for more details.
-
 ```
 GET /products?$add=quantitySold
 ```
 
 ### querying resource fields
 
-Query by any resource field with a field, find, or filter attribute.
+You can query by any resource field with a 'field', 'find', or 'filter' attribute.
 
 ```
 GET /products?name=strawberry
+```
+
+If the querying against one with a 'field' attribute, it will automatically perform an $in query.
+
+```
+GET /products?name=strawberry&name=apple
+=>
+Product.find({ 'name': $in: ['strawberry', 'apple'] })
+```
+
+Note that you can query nested fields with Express' [bracket] notation.
+
+```
 GET /products?categrory[name]=fruit
 ```
-Note that you can query nested fields with Express' [bracket] notation.
 
 
 ## Contributing
