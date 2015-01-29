@@ -287,7 +287,10 @@ module.exports = class ResourceSchema
 
       # apply model queries
       else if @schema[resourceField].field
-        modelQuery[@schema[resourceField].field] = value
+        if Array.isArray(value)
+          modelQuery[@schema[resourceField].field] = { $in: value }
+        else
+          modelQuery[@schema[resourceField].field] = value
 
     q.all(queryPromises).then -> modelQuery
 
@@ -446,8 +449,8 @@ module.exports = class ResourceSchema
     _.compact(modelSelectFields).join(' ')
 
   ###
-  Get resource query object from the request query. This query object comes from
-  all the non reserved query parameters (e.g. ?name=joe, or product.price=15)
+  Get resource query object from the query parameters. This query object comes from
+  all the non reserved query parameters (e.g. ?name=joe, or ?product[price]=15, not ?$limit=5)
   @param [Object] query - query params from client
   @returns [Object] valid query params and values
   @example

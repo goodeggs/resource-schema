@@ -420,6 +420,30 @@ suite 'GET many', ({withModel, withServer}) ->
           expect(@response.body.length).to.equal 1
           expect(@response.body[0].product.price).to.equal 27
 
+      describe 'querying by an array', ->
+        withModel (mongoose) ->
+          mongoose.Schema price: Number
+
+        withServer (app) ->
+          @resource = new ResourceSchema @model, {'price'}
+          app.get '/products', @resource.get(), @resource.send
+
+        beforeEach fibrous ->
+          @model.sync.create price: 10
+          @model.sync.create price: 12
+          @model.sync.create price: 20
+          @model.sync.create price: 27
+
+        it 'returns all documents the match the values in the array', ->
+          @response = @request.sync.get
+            url: '/products?price=12&price=27',
+            json: true
+
+          expect(@response.statusCode).to.equal 200
+          expect(@response.body).to.have.length 2
+          expect(@response.body[0]).to.have.property 'price', 12
+          expect(@response.body[1]).to.have.property 'price', 27
+
       describe 'renamed field', ->
         withModel (mongoose) ->
           mongoose.Schema
