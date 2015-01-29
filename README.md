@@ -305,24 +305,26 @@ new ResourceSchema(Model, schema, {
 })
 
 ```
-### defaultLimit: Number
+### limit: Number
 
 Limit the number of returned documents for GET requests. Defaults to 1000.
 
 ``` javascript
 new ResourceSchema(Model, schema, {
-  defaultLimit: 100
+  limit: 100
 })
 
 ```
 
-### defaultQuery: Object
+### find: function(context)
 
-Set the default query for this resource. All other query parameters will extend this query.
+- **context** - object containing req, res, next, and resolved values (see "resolve" for details)
+
+Function returns an object that will be used at as starting point to build every query.
 
 ``` javascript
 new ResourceSchema(Product, schema, {
-  defaultQuery: {
+  find: function(context) {
     active: true,
     createdAt: $gt: '2013-01-01'
   }
