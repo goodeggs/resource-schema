@@ -540,9 +540,13 @@ suite 'GET many', ({withModel, withServer}) ->
         expect(response.body[1].name).to.equal 'Frodo'
         expect(response.body[1].orderCount).to.equal 10
 
-    describe 'defaultLimit', ->
+    describe 'limit', ->
       withModel (mongoose) ->
         mongoose.Schema { name: String }
+
+      withServer (app) ->
+        @resource = new ResourceSchema @model, { 'name' }, { limit: 2 }
+        app.get '/users', @resource.get(), @resource.send
 
       beforeEach fibrous ->
         @model.sync.create { name: 'Bilbo' }
@@ -550,15 +554,7 @@ suite 'GET many', ({withModel, withServer}) ->
         @model.sync.create { name: 'Mary' }
         @model.sync.create { name: 'Pippin' }
 
-        schema = { 'name' }
-
-        @resource = new ResourceSchema @model, schema,
-          defaultLimit: 2
-
-      withServer (app) ->
-        app.get '/users', @resource.get(), @resource.send
-
-      it 'uses default limit', fibrous ->
+      it 'limits the returned documents', fibrous ->
         response = @request.sync.get
           url: '/users',
           json: true

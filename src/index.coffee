@@ -384,7 +384,7 @@ module.exports = class ResourceSchema
   @returns [Number] Max number of resources to return in response
   ###
   _getLimit: (query) =>
-    query.$limit or @options.defaultLimit or 1000
+    query.$limit or @options.limit or 1000
 
   ###
   Get resource fields that will be returned with this request. Reject everything
