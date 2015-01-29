@@ -1,7 +1,6 @@
 dot = require 'dot-component'
 _ = require 'underscore'
 q = require 'q'
-clone = require 'clone'
 deepExtend = require './deep_extend'
 mongoose = require 'mongoose'
 boom = require 'boom'
