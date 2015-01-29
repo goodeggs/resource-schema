@@ -135,7 +135,7 @@ module.exports = class ResourceSchema
     @_buildContext(requestContext, resources, models).then =>
       d = q.defer()
       @_applySetters(resourceByModelId, models, requestContext)
-      # use node resolver b/c q does not pass splat arguments
+      # must create custom promise here b/c $q does not pass splat arguments
       @Model.create models, (err, modelsSaved...) ->
         d.reject(boom.wrap err) if err
         d.resolve(modelsSaved)

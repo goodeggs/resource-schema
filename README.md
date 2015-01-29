@@ -113,7 +113,7 @@ We can define the schema using these properties:
 - **field** - string that maps a resource field to a mongoose model field.
 - **get** - function that dynamically gets the value whenever a resource is requested.
 - **set** - function that dynamically sets the value whenever a resource is PUT or POSTed
-- **resolve** - TODO
+- **resolve** - function for getting async data needed to build resource
 - **find** - function that dynamically builds a mongoose query whenever querying by this field
 - **findAsync** - TODO asynchronous version of find
 - **optional** - do not include this field in the resource unless specifically requested with the $add query parameter
@@ -190,6 +190,36 @@ var schema = {
 }
 ```
 
+### resolve: Object
+
+Key value object where the key is the name of the variable to resolve, and the value is an asynchronous function that returns the value. The function accepts one argument:
+
+- **context** - object containing req, res, next, models, and resources associated with this request
+
+Once a variable is resolved, it is attached to the "context" object, and is available to all the getters and setters for that field.
+
+``` javascript
+var schema = {
+  'note': {
+    resolve:
+      userNoteByUserId: function(context, done) {
+        var userIds = context.models.map(function(user) { return user._id });
+        UserNote.find({userId: $in: userIds}).then(function(notes) {
+          var userNoteByUserId = _(notes).indexBy('userId');
+          done(null, userNoteByUserId);
+        });
+      })
+    },
+
+    // userNoteByUserId now available on context object
+    get: function (user, context) {
+      var userNoteByUserId = context.userNoteByUserId;
+      return userNoteByUserId[user._id];
+    }
+  }
+}
+```
+
 ### find: function(value, context)
 
 - **value** - value of query parameter from client
@@ -216,7 +246,7 @@ If true, do not include this field in the resource unless specifically requested
 
 var schema = {
   'name': {
-    optional: true
+    optional: true,
     field: 'name'
   }
 }
@@ -329,6 +359,12 @@ new ResourceSchema(Product, schema, {
     createdAt: $gt: '2013-01-01'
   }
 })
+
+```
+
+### resolve: Object
+
+Like resolve on schema, but resolved variable available to every getter and setter on the resource.
 
 ```
 
