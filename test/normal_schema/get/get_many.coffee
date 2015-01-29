@@ -106,60 +106,35 @@ suite 'GET many', ({withModel, withServer}) ->
         expect(response.body[1].price).to.equal 27
 
     describe 'filter', ->
-      describe 'default filter', ->
-        withModel (mongoose) ->
-          mongoose.Schema name: String
+      withModel (mongoose) ->
+        mongoose.Schema
+          price: Number
 
-        beforeEach fibrous ->
-          @model.sync.create name: 'hello'
-          @model.sync.create name: 'bad'
-          @model.sync.create name: 'goodbye'
+      beforeEach fibrous ->
+        @model.sync.create price: 20
+        @model.sync.create price: 27
+        @model.sync.create price: 10
 
-          @resource = new ResourceSchema @model, {'name'},
-            filter: (documents) ->
-              documents.filter ({name}) ->
-                name isnt 'bad'
+        schema =
+          'price': 'price'
+          'minPrice':
+            filter: (value, documents) ->
+              documents.filter (document) ->
+                document?.price > value
 
-        withServer (app) ->
-          app.get '/res', @resource.get(), @resource.send
+        @resource = new ResourceSchema @model, schema
 
-        it 'filters out unwanted documents by default', fibrous ->
-          response = @request.sync.get '/res'
-          expect(response.body).to.deep.equal [
-            {name: 'hello'}
-            {name: 'goodbye'}
-          ]
+      withServer (app) ->
+        app.get '/products', @resource.get(), @resource.send
 
-      describe 'filter: [Function]', ->
-        withModel (mongoose) ->
-          mongoose.Schema
-            price: Number
+      it 'filters by the correct values', fibrous ->
+        response = @request.sync.get
+          url: '/products?minPrice=12',
+          json: true
 
-        beforeEach fibrous ->
-          @model.sync.create price: 20
-          @model.sync.create price: 27
-          @model.sync.create price: 10
-
-          schema =
-            'price': 'price'
-            'minPrice':
-              filter: (value, documents) ->
-                documents.filter (document) ->
-                  document?.price > value
-
-          @resource = new ResourceSchema @model, schema
-
-        withServer (app) ->
-          app.get '/products', @resource.get(), @resource.send
-
-        it 'filters by the correct values', fibrous ->
-          response = @request.sync.get
-            url: '/products?minPrice=12',
-            json: true
-
-          expect(response.body.length).to.equal 2
-          expect(response.body[0].price).to.equal 20
-          expect(response.body[1].price).to.equal 27
+        expect(response.body.length).to.equal 2
+        expect(response.body[0].price).to.equal 20
+        expect(response.body[1].price).to.equal 27
 
     describe 'optional', ->
       withModel (mongoose) ->
@@ -466,7 +441,7 @@ suite 'GET many', ({withModel, withServer}) ->
           expect(response.body.length).to.equal 1
           expect(response.body[0].productPrice).to.equal 27
 
-  describe.only 'options', ->
+  describe 'options', ->
     describe 'find', ->
       withModel (mongoose) ->
         mongoose.Schema
@@ -501,6 +476,29 @@ suite 'GET many', ({withModel, withServer}) ->
         expect(response.body.length).to.equal 2
         expect(response.body[0].price).to.equal 10
         expect(response.body[1].price).to.equal 20
+
+    describe 'filter', ->
+      withModel (mongoose) ->
+        mongoose.Schema name: String
+
+      withServer (app) ->
+        @resource = new ResourceSchema @model, {'name'},
+          filter: (documents) ->
+            documents.filter ({name}) ->
+              name isnt 'bad'
+        app.get '/res', @resource.get(), @resource.send
+
+      beforeEach fibrous ->
+        @model.sync.create name: 'hello'
+        @model.sync.create name: 'bad'
+        @model.sync.create name: 'goodbye'
+
+      it 'applies the filter to every request', fibrous ->
+        response = @request.sync.get '/res'
+        expect(response.body).to.deep.equal [
+          {name: 'hello'}
+          {name: 'goodbye'}
+        ]
 
     describe 'resolve', ->
       withModel (mongoose) ->
