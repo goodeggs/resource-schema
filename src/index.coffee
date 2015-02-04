@@ -32,8 +32,6 @@ module.exports = class ResourceSchema
       requestContext = {req, res, next}
       return if not @_enforceValidity(req.query, requestContext)
 
-      select = @_getModelSelectFields req.query
-
       idValue = req.params[paramId]
       query = {}
       query[paramId] = idValue
@@ -43,7 +41,6 @@ module.exports = class ResourceSchema
         return next boom.wrap err
 
       modelQuery = @Model.findOne(query)
-      modelQuery.select(select) if select?
       modelQuery.lean()
       modelQuery.exec().then (model) =>
         return next boom.notFound("No resources found with #{paramId} of #{idValue}") if not model?
@@ -59,7 +56,6 @@ module.exports = class ResourceSchema
       # normal (non aggregate) resource
       if not @options.groupBy
         modelQuery = @Model.find(mongoQuery)
-        modelQuery.select(@_getModelSelectFields req.query)
         modelQuery.lean()
 
       # aggregate resource
