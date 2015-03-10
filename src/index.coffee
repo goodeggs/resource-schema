@@ -54,14 +54,7 @@ module.exports = class ResourceSchema
 
     @_getMongoQuery(requestContext).then (mongoQuery) =>
       # normal (non aggregate) resource
-      if not @options.groupBy
-        modelQuery = @Model.find(mongoQuery)
-
-      # aggregate resource
-      if @options.groupBy
-        modelQuery = @Model.aggregate()
-        modelQuery.match(mongoQuery)
-        modelQuery.group(@_getGroupQuery())
+      modelQuery = @Model.find(mongoQuery)
 
       limit = @_getLimit req.query
       modelQuery.limit(limit) if limit
@@ -315,10 +308,6 @@ module.exports = class ResourceSchema
 
     resourceSelectFields = @_getResourceSelectFields(req.query)
 
-    #set _id for aggregate resources
-    if @options.groupBy?.length
-      resource._id = model._id
-
     #set all other fields
     for resourceField, config of @schema
       # TODO set default select to all fields?
@@ -356,24 +345,6 @@ module.exports = class ResourceSchema
         continue if resourceField not in selectedResourceFields
         continue if typeof config.get isnt 'function'
         dot.set resource, resourceField, config.get(model, requestContext)
-
-  ###
-  Get $group config used for aggregating the model
-  ###
-  _getGroupQuery: =>
-    groupQuery = {}
-    #set _id
-    groupQuery._id = {}
-    for aggregateField in @options.groupBy
-      groupQuery._id[aggregateField.replace('.', '')] = '$' + aggregateField
-
-    #set all other fields
-    for field, config of @schema
-      if config.field
-        groupQuery[field] = $first: '$' + config.field
-      else if config.get and typeof config.get is 'object'
-        groupQuery[field] = config.get
-    groupQuery
 
   ###
   Get value to use for limiting query results. Defaults to 10000
