@@ -158,3 +158,20 @@ suite 'GET one', ({withModel, withServer}) ->
         response = @request.sync.get "/res/#{model._id}?$select=price%20name"
         expect(response.statusCode).to.equal 200
         expect(response.body).to.deep.equal {price: 2.99, name: 'apple'}
+
+  given 'edge cases', ->
+    describe 'default on mongoose model', ->
+      withModel (mongoose) ->
+        mongoose.Schema
+          name: {type: String, default: 'foo'}
+
+      withServer (app) ->
+        @resource = new ResourceSchema @model, {'_id', 'name'}
+        app.get '/bar/:_id', @resource.get('_id'), @resource.send
+
+      it 'uses the mongoose schema defaults', fibrous ->
+        _id = new mongoose.Types.ObjectId()
+        @model.collection.sync.insert {_id}
+        response = @request.sync.get "/bar/#{_id}"
+        expect(response.body).to.have.property '_id'
+        expect(response.body).to.have.property 'name', 'foo'

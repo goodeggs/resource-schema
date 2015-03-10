@@ -41,9 +41,9 @@ module.exports = class ResourceSchema
         return next boom.wrap err
 
       modelQuery = @Model.findOne(query)
-      modelQuery.lean()
       modelQuery.exec().then (model) =>
         return next boom.notFound("No resources found with #{paramId} of #{idValue}") if not model?
+        model = model.toObject()
         @_sendResource(model, requestContext)
       .then null, (err) =>
         @_handleRequestError(err, requestContext)
@@ -56,7 +56,6 @@ module.exports = class ResourceSchema
       # normal (non aggregate) resource
       if not @options.groupBy
         modelQuery = @Model.find(mongoQuery)
-        modelQuery.lean()
 
       # aggregate resource
       if @options.groupBy
@@ -68,6 +67,7 @@ module.exports = class ResourceSchema
       modelQuery.limit(limit) if limit
       modelQuery.exec()
     .then (models) =>
+      models = _(models).invoke 'toObject'
       @_sendResources(models, requestContext)
     .then null, (err) =>
       @_handleRequestError(err, requestContext)
@@ -172,9 +172,10 @@ module.exports = class ResourceSchema
       @_buildContext(requestContext, [resource], [model]).then =>
         @_applySetters(resourceByModelId, [model], requestContext)
         delete model._id
-        @Model.findOneAndUpdate(query, model, {upsert: true}).lean().exec()
+        @Model.findOneAndUpdate(query, model, {upsert: true}).exec()
       .then (model) =>
         return next boom.notFound() if not model?
+        model = model.toObject()
         res.status(200)
         @_sendResource(model, requestContext)
       .then null, (err) =>
@@ -207,10 +208,11 @@ module.exports = class ResourceSchema
         modelId = model._id
         throw boom.badRequest('_id required to update') if not modelId
         delete model._id
-        @Model.findByIdAndUpdate(modelId, model, {upsert: true}).lean().exec(d.makeNodeResolver())
+        @Model.findByIdAndUpdate(modelId, model, {upsert: true}).exec(d.makeNodeResolver())
         d.promise
       q.all(savePromises)
     .then (updatedModels) =>
+      updatedModels = _(updatedModels).invoke 'toObject'
       @_sendResources(updatedModels, requestContext)
     .then null, (err) ->
       @_handleRequestError(err, requestContext)

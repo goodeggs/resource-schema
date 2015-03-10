@@ -593,6 +593,23 @@ suite 'GET many', ({withModel, withServer}) ->
         expect(response.body[1].name).to.equal 'Frodo'
 
   describe 'edge cases', ->
+    describe 'default on mongoose model', ->
+      withModel (mongoose) ->
+        mongoose.Schema
+          name: {type: String, default: 'foo'}
+
+      withServer (app) ->
+        @resource = new ResourceSchema @model, {'_id', 'name'}
+        app.get '/bar', @resource.get(), @resource.send
+
+      it 'uses the mongoose schema defaults', fibrous ->
+        _id = new mongoose.Types.ObjectId()
+        @model.collection.sync.insert {_id}
+        response = @request.sync.get "/bar"
+        expect(response.body).to.have.length 1
+        expect(response.body[0]).to.have.property '_id'
+        expect(response.body[0]).to.have.property 'name', 'foo'
+
     describe 'default limit of 1000', ->
       withModel (mongoose) ->
         mongoose.Schema name: String

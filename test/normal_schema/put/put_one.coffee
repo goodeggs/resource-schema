@@ -189,3 +189,20 @@ suite 'PUT one', ({withModel, withServer}) ->
       expect(response.body.name).to.equal 'joe'
       expect(response.body.score).to.be.undefined
       expect(response.body.age).to.be.undefined
+
+  given 'edge cases', ->
+    describe 'default on mongoose model', ->
+      withModel (mongoose) ->
+        mongoose.Schema
+          name: {type: String, default: 'foo'}
+
+      withServer (app) ->
+        @resource = new ResourceSchema @model, {'_id', 'name'}
+        app.put '/bar/:_id', @resource.put('_id'), @resource.send
+
+      it 'uses the mongoose schema defaults', fibrous ->
+        _id = new mongoose.Types.ObjectId()
+        response = @request.sync.put "/bar/#{_id}",
+          json: {}
+        expect(response.body).to.have.property '_id'
+        expect(response.body).to.have.property 'name', 'foo'

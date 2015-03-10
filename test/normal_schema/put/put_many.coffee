@@ -57,3 +57,20 @@ suite 'PUT many', ({withModel, withServer}) ->
     it '200s with an empty array', ->
       expect(@response.statusCode).to.equal 200
       expect(@response.body).to.deep.equal []
+
+  describe 'edge cases', ->
+    describe 'default on mongoose model', ->
+      withModel (mongoose) ->
+        mongoose.Schema
+          name: {type: String, default: 'foo'}
+
+      withServer (app) ->
+        @resource = new ResourceSchema @model, {'_id', 'name'}
+        app.put '/bar', @resource.put(), @resource.send
+
+      it 'uses the mongoose schema defaults', fibrous ->
+        _id = new mongoose.Types.ObjectId()
+        response = @request.sync.put "/bar",
+          json: [{_id}]
+        expect(response.body[0]).to.have.property '_id'
+        expect(response.body[0]).to.have.property 'name', 'foo'

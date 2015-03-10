@@ -37,7 +37,7 @@ suiteHelpers =
       app.use bodyParser.json()
       app.use bodyParser.urlencoded()
       app.use cookieParser()
-      app = appFn.call @, app
+      appFn.call @, app
       app.use (err, req, res, next) -> # add standard error-catching middleware
         console.log {err}
         throw err unless err.isBoom
