@@ -1,3 +1,11 @@
+# 0.13.0
+
+## Breaking changes
+- remove support for aggregate schemas
+
+## Bugfixes
+- use mongoose defaults when generating resource
+
 # 0.12.1
 
 ## Bug Fixes
