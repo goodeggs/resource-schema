@@ -36,7 +36,7 @@ suite 'POST one', ({withModel, withServer}) ->
       json: { _id: '123', name: 'apple' }
     expect(@response.statusCode).to.equal 400
 
-  it.only '400 when validation failed', fibrous ->
+  it '400 when validation failed', fibrous ->
     @response = @request.sync.post "/res",
       json: { }
     expect(@response.statusCode).to.equal 400
