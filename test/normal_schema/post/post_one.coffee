@@ -7,7 +7,7 @@ ResourceSchema = require '../../..'
 
 suite 'POST one', ({withModel, withServer}) ->
   withModel (mongoose) ->
-    mongoose.Schema name: String
+    mongoose.Schema name: type: String, required: true
 
   beforeEach ->
     schema = { '_id', 'name', 'price' }
@@ -34,4 +34,9 @@ suite 'POST one', ({withModel, withServer}) ->
   it '400s when posting invalid field', fibrous ->
     @response = @request.sync.post "/res",
       json: { _id: '123', name: 'apple' }
+    expect(@response.statusCode).to.equal 400
+
+  it.only '400 when validation failed', fibrous ->
+    @response = @request.sync.post "/res",
+      json: { }
     expect(@response.statusCode).to.equal 400
