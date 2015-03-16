@@ -94,11 +94,14 @@ module.exports = class ResourceSchema
     @_buildContext(requestContext, [resource], [model]).then =>
       @_applySetters(resourceByModelId, [model], requestContext)
       model = new @Model(model)
-      model.save()
+      deferred = q.defer()
+      model.save(deferred.makeNodeResolver())
+      deferred.promise
     .then (modelSaved) =>
       res.status(201)
       @_sendResource(model, requestContext)
     .then null, (err) =>
+      console.log {err}
       @_handleRequestError(err, requestContext)
 
   _postMany: (req, res, next) ->
