@@ -7,10 +7,13 @@ ResourceSchema = require '../../..'
 
 suite 'POST one', ({withModel, withServer}) ->
   withModel (mongoose) ->
-    mongoose.Schema name: type: String, required: true
+    schema = mongoose.Schema name: type: String, required: true
+    schema.pre 'save', (next) ->
+      @quantity = 1
+      next()
 
   beforeEach ->
-    schema = { '_id', 'name', 'price' }
+    schema = { '_id', 'name', 'price', 'quantity' }
     @resource = new ResourceSchema @model, schema
 
   withServer (app) ->
@@ -23,6 +26,7 @@ suite 'POST one', ({withModel, withServer}) ->
     expect(@response.statusCode).to.equal 201
     expect(@response.body.name).to.equal 'apple'
     expect(@response.body._id).to.be.ok
+    expect(@response.body.quantity).to.be.ok
 
   it 'saves the models to the DB', fibrous ->
     @response = @request.sync.post "/res",

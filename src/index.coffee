@@ -95,11 +95,15 @@ module.exports = class ResourceSchema
       @_applySetters(resourceByModelId, [model], requestContext)
       model = new @Model(model)
       deferred = q.defer()
-      model.save(deferred.makeNodeResolver())
+      model.save (err, modelSaved) ->
+        if err?
+          deferred.reject(boom.wrap err)
+        else
+          deferred.resolve(modelSaved)
       deferred.promise
     .then (modelSaved) =>
       res.status(201)
-      @_sendResource(model, requestContext)
+      @_sendResource(modelSaved, requestContext)
     .then null, (err) =>
       console.log {err}
       @_handleRequestError(err, requestContext)
@@ -128,8 +132,10 @@ module.exports = class ResourceSchema
       @_applySetters(resourceByModelId, models, requestContext)
       # must create custom promise here b/c $q does not pass splat arguments
       @Model.create models, (err, modelsSaved...) ->
-        d.reject(boom.wrap err) if err
-        d.resolve(modelsSaved)
+        if err?
+          d.reject(boom.wrap err)
+        else
+          d.resolve(modelsSaved)
       d.promise
     .then (modelsSaved) =>
       res.status(201)
