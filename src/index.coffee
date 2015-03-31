@@ -2,7 +2,7 @@ dot = require 'dot-component'
 _ = require 'underscore'
 q = require 'q'
 deepExtend = require './deep_extend'
-mongoose = require 'mongoose'
+ObjectId = require('bson').ObjectID
 boom = require 'boom'
 
 RESERVED_KEYWORDS = require './reserved_keywords'
@@ -322,7 +322,7 @@ module.exports = class ResourceSchema
       if config.field
         value = dot.get resource, resourceField
         dot.set(model, config.field, value) if value isnt undefined
-    model._id ?= new mongoose.Types.ObjectId()
+    model._id ?= new ObjectId()
     model
 
   ###
@@ -500,11 +500,10 @@ module.exports = class ResourceSchema
     for schemaKey in schemaKeys
       instance = Model.schema.paths[schemaKey].instance
       type = switch instance
-        when 'Buffer' then mongoose.Types.Buffer
         when 'Boolean' then Boolean
         when 'Date' then Date
         when 'Number' then Number
-        when 'ObjectID' then mongoose.Types.ObjectId
+        when 'ObjectID' then ObjectId
         when 'String' then String
       schema[schemaKey] =
         field: schemaKey
@@ -584,7 +583,7 @@ module.exports = class ResourceSchema
   - Date
   - Number
   - Boolean
-  - mongoose.Types.ObjectId and other newable objects
+  - ObjectId and other newable objects
 
   @throws a boom http exception if any of the supplied values are invalid
   ###
@@ -611,9 +610,9 @@ module.exports = class ResourceSchema
           date = new Date(value)
           throw badRequest('Date', key, value) if isNaN(date.getTime())
           return date
-        when mongoose.Types.ObjectId
+        when ObjectId
           try
-            return new mongoose.Types.ObjectId(value)
+            return new ObjectId(value)
           catch
             throw badRequest('ObjectId', key, value)
         # other stuff
@@ -708,7 +707,7 @@ module.exports = class ResourceSchema
 
     resourceByModelId = {}
     resources = models.map (model) =>
-      if not mongoose.Types.ObjectId.isValid(model._id.toString())
+      if not ObjectId.isValid(model._id.toString())
         model._id = _(model._id).values().join('|')
       resource = @_createResourceFromModel(model, requestContext)
       resourceByModelId[model._id.toString()] = resource
