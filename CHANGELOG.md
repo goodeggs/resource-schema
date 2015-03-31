@@ -1,3 +1,13 @@
+# 0.15.0
+
+## Features
+- put requests trigger mongoose document middleware (save hooks, validation, etc.)
+
+# 0.14.0
+
+## Bugfixes
+- POST of a non-array resource was not responding with the post-mongoose-save model
+
 # 0.13.0
 
 ## Breaking changes
