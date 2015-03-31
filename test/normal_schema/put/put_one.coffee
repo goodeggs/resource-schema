@@ -2,6 +2,7 @@ fibrous = require 'fibrous'
 mongoose = require 'mongoose'
 expect = require('chai').expect
 mongoose = require 'mongoose'
+sinon = require 'sinon'
 {suite, given} = require '../../support/helpers'
 
 ResourceSchema = require '../../..'
@@ -190,19 +191,42 @@ suite 'PUT one', ({withModel, withServer}) ->
       expect(response.body.score).to.be.undefined
       expect(response.body.age).to.be.undefined
 
-  given 'edge cases', ->
-    describe 'default on mongoose model', ->
-      withModel (mongoose) ->
-        mongoose.Schema
-          name: {type: String, default: 'foo'}
+  given 'default on mongoose model', ->
+    withModel (mongoose) ->
+      mongoose.Schema
+        name: {type: String, default: 'foo'}
 
-      withServer (app) ->
-        @resource = new ResourceSchema @model, {'_id', 'name'}
-        app.put '/bar/:_id', @resource.put('_id'), @resource.send
+    withServer (app) ->
+      @resource = new ResourceSchema @model, {'_id', 'name'}
+      app.put '/bar/:_id', @resource.put('_id'), @resource.send
 
-      it 'uses the mongoose schema defaults', fibrous ->
-        _id = new mongoose.Types.ObjectId()
-        response = @request.sync.put "/bar/#{_id}",
-          json: {}
-        expect(response.body).to.have.property '_id'
-        expect(response.body).to.have.property 'name', 'foo'
+    it 'uses the mongoose schema defaults', fibrous ->
+      _id = new mongoose.Types.ObjectId()
+      response = @request.sync.put "/bar/#{_id}",
+        json: {}
+      expect(response.body).to.have.property '_id'
+      expect(response.body).to.have.property 'name', 'foo'
+
+  given 'save hooks on mongoose model', ->
+    saveSpy = sinon.spy()
+
+    withModel (mongoose) ->
+      schema = mongoose.Schema
+        name: String
+
+      schema.pre 'save', (next) ->
+        saveSpy()
+        next()
+
+    withServer (app) ->
+      @resource = new ResourceSchema @model, {'_id', 'name'}
+      app.put '/fruit/:_id', @resource.put('_id'), @resource.send
+
+    beforeEach fibrous ->
+      @apple = @model.sync.create name: 'apple'
+      saveSpy.reset()
+
+    it 'calls the save hook', fibrous ->
+      @request.sync.put "/fruit/#{@apple._id}", json: {name: 'orange'}
+      expect(saveSpy.callCount).to.equal 1
+
