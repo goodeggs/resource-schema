@@ -152,6 +152,27 @@ module.exports = class ResourceSchema
     else
       @_putMany
 
+  _upsertOne: (query, model) ->
+    deferred = q.defer()
+
+    @Model.findOne query, (err, modelFound) =>
+      if err?
+        deferred.reject(boom.wrap err)
+
+      model = if modelFound
+        delete model._id
+        _.extend(modelFound, model)
+      else
+        new @Model(model)
+
+      model.save (err, modelSaved) ->
+        if err?
+          deferred.reject(boom.wrap err)
+        else
+          deferred.resolve(modelSaved)
+
+    deferred.promise
+
   _putOne: (paramId) ->
     (req, res, next) =>
       requestContext = {req, res, next}
@@ -173,8 +194,7 @@ module.exports = class ResourceSchema
       resourceByModelId[model._id.toString()] = resource
       @_buildContext(requestContext, [resource], [model]).then =>
         @_applySetters(resourceByModelId, [model], requestContext)
-        delete model._id
-        @Model.findOneAndUpdate(query, model, {upsert: true}).exec()
+        @_upsertOne(query, model)
       .then (model) =>
         return next boom.notFound() if not model?
         model = model.toObject()
@@ -206,12 +226,10 @@ module.exports = class ResourceSchema
     @_buildContext(requestContext, resources, models).then =>
       @_applySetters(resourceByModelId, models, requestContext)
       savePromises = models.map (model) =>
-        d = q.defer()
         modelId = model._id
-        throw boom.badRequest('_id required to update') if not modelId
         delete model._id
-        @Model.findByIdAndUpdate(modelId, model, {upsert: true}).exec(d.makeNodeResolver())
-        d.promise
+        throw boom.badRequest('_id required to update') if not modelId
+        @_upsertOne({_id: modelId}, model)
       q.all(savePromises)
     .then (updatedModels) =>
       updatedModels = _(updatedModels).invoke 'toObject'
