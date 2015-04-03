@@ -152,7 +152,7 @@ module.exports = class ResourceSchema
     else
       @_putMany
 
-  _upsertOne: (query, model) ->
+  _upsertOne: (query, updatedModel) ->
     deferred = q.defer()
 
     @Model.findOne query, (err, modelFound) =>
@@ -160,10 +160,16 @@ module.exports = class ResourceSchema
         deferred.reject(boom.wrap err)
 
       model = if modelFound
-        delete model._id
-        _.extend(modelFound, model)
+        delete updatedModel._id
+
+        # Unset any arrays to work around mongoose sub document validation bugs
+        _.keys(updatedModel)
+          .filter((key) -> updatedModel[key] instanceof Array)
+          .forEach((key) -> modelFound[key] = undefined)
+
+        _.extend(modelFound, updatedModel)
       else
-        new @Model(model)
+        new @Model(updatedModel)
 
       model.save (err, modelSaved) ->
         if err?
