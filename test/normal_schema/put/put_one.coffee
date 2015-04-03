@@ -230,3 +230,28 @@ suite 'PUT one', ({withModel, withServer}) ->
       @request.sync.put "/fruit/#{@apple._id}", json: {name: 'orange'}
       expect(saveSpy.callCount).to.equal 1
 
+  given 'schema with nested requires', ->
+    saveSpy = sinon.spy()
+
+    withModel (mongoose) ->
+      mongoose.Schema
+        name: String
+        siblings: [
+          name: String
+          age: type: Number, required: true
+        ]
+
+    withServer (app) ->
+      @resource = new ResourceSchema @model, {'_id', 'name', 'siblings'}
+      app.put '/person/:_id', @resource.put('_id'), @resource.send
+
+    beforeEach fibrous ->
+      @michael = @model.sync.create name: 'Michael', siblings: [
+        {name: 'Matthew', age: 33},
+        {name: 'Jon', age: 38}
+      ]
+
+    it 'allows you to remove and update items in the array', fibrous ->
+      response = @request.sync.put "/person/#{@michael._id}", json: {siblings: [{name: 'Jon', age:39, _id: @michael.siblings[1]._id}]}
+      expect(response.statusCode).to.equal 200
+
