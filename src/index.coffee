@@ -2,7 +2,7 @@ dot = require 'dot-component'
 _ = require 'underscore'
 q = require 'q'
 deepExtend = require './deep_extend'
-ObjectId = require('bson').ObjectID
+ObjectId = require('mongoose').Types.ObjectID
 boom = require 'boom'
 
 RESERVED_KEYWORDS = require './reserved_keywords'
