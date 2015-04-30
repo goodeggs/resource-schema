@@ -2,7 +2,13 @@ dot = require 'dot-component'
 _ = require 'underscore'
 q = require 'q'
 deepExtend = require './deep_extend'
-ObjectId = require('bson').ObjectID
+
+# peer dependency
+try
+  ObjectId = require('mongoose').Types.ObjectId
+catch err
+  throw new Error "Missing peer dependency 'mongoose'"
+
 boom = require 'boom'
 
 RESERVED_KEYWORDS = require './reserved_keywords'
