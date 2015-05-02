@@ -39,6 +39,7 @@ suiteHelpers =
       app.use cookieParser()
       appFn.call @, app
       app.use (err, req, res, next) -> # add standard error-catching middleware
+        console.log err.stack
         console.log {err}
         throw err unless err.isBoom
         console.error err.output.payload

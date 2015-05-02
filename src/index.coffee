@@ -111,7 +111,6 @@ module.exports = class ResourceSchema
       res.status(201)
       @_sendResource(modelSaved, requestContext)
     .then null, (err) =>
-      console.log {err}
       @_handleRequestError(err, requestContext)
 
   _postMany: (req, res, next) ->
@@ -138,6 +137,9 @@ module.exports = class ResourceSchema
       @_applySetters(resourceByModelId, models, requestContext)
       # must create custom promise here b/c $q does not pass splat arguments
       @Model.create models, (err, modelsSaved...) ->
+        # so that we are compatible with api of both mongoose 3.8.x and 4.0.x...
+        modelsSaved = if Array.isArray(modelsSaved[0]) then modelsSaved[0] else modelsSaved
+
         if err?
           d.reject(boom.wrap err)
         else
@@ -719,8 +721,6 @@ module.exports = class ResourceSchema
 
     resourceByModelId = {}
     resources = models.map (model) =>
-      if not ObjectId.isValid(model._id.toString())
-        model._id = _(model._id).values().join('|')
       resource = @_createResourceFromModel(model, requestContext)
       resourceByModelId[model._id.toString()] = resource
       resource
