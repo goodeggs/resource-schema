@@ -1,6 +1,6 @@
 {
   "name": "resource-schema",
-  "version": "0.17.1",
+  "version": "0.17.2",
   "description": "Define schemas for RESTful resources from mongoose models, and generate middleware to GET, POST, PUT, and DELETE to those resources.",
   "author": "Good Eggs <open-source@goodeggs.com>",
   "contributors": [
