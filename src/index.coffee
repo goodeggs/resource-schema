@@ -11,7 +11,7 @@ catch err
 
 boom = require 'boom'
 
-RESERVED_KEYWORDS = require './reserved_keywords'
+keyChecker = require './key_checker'
 
 module.exports = class ResourceSchema
   constructor: (@Model, schema, @options = {}) ->
@@ -481,14 +481,17 @@ module.exports = class ResourceSchema
 
   ###
   Collapse all nested fields to dot format. Ignore Reserved Keywords on schema.
+  @param {Object} obj - object to convert to dot strings
+  @param {Function} [shouldIgnore] - optional function to check if you should ignore the key for dot stringifying
   @example {a: {b: 1}} -> {'a.b': 1}
   ###
-  _convertKeysToDotStrings: (obj) =>
+  _convertKeysToDotStrings: (obj, shouldIgnore) =>
+    shouldIgnore ?= -> false
     dotKeys = {}
     dotStringify = (obj, current) ->
       for key, value of obj
         newKey = if current then current + "." + key else key
-        if key in RESERVED_KEYWORDS
+        if shouldIgnore(key, value)
           dotKeys[current] ?= {}
           dotKeys[current][key] = value
         # do not dot stringify array
@@ -536,7 +539,7 @@ module.exports = class ResourceSchema
     => 'test.property': { field: 'test' }
   ###
   _normalizeSchema: (schema) =>
-    schema = @_convertKeysToDotStrings(schema)
+    schema = @_convertKeysToDotStrings(schema, keyChecker.isReserved)
     normalizedSchema = {}
     for key, config of schema
       if typeof config is 'string'

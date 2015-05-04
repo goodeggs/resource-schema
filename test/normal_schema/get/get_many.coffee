@@ -592,6 +592,41 @@ suite 'GET many', ({withModel, withServer}) ->
         expect(response.body[0].name).to.equal 'Bilbo'
         expect(response.body[1].name).to.equal 'Frodo'
 
+  describe 'using reserved keywords in schema', ->
+    describe 'type', ->
+      withModel (mongoose) ->
+        mongoose.Schema
+          type: String
+
+      withServer (app) ->
+        @resource = new ResourceSchema @model, {'_id', 'type'}
+        app.get '/products', @resource.get(), @resource.send
+
+      it 'includes in schema if not a function', fibrous ->
+        _id = new mongoose.Types.ObjectId()
+        @model.sync.create {type: 'fruit'}
+        response = @request.sync.get "/products"
+        expect(response.body).to.have.length 1
+        expect(response.body[0]).to.have.property '_id'
+        expect(response.body[0]).to.have.property 'type', 'fruit'
+
+    describe 'optional', ->
+      withModel (mongoose) ->
+        mongoose.Schema
+          optional: Boolean
+
+      withServer (app) ->
+        @resource = new ResourceSchema @model, {'_id', 'optional'}
+        app.get '/products', @resource.get(), @resource.send
+
+      it 'includes in schema if not a boolean', fibrous ->
+        _id = new mongoose.Types.ObjectId()
+        @model.sync.create {optional: true}
+        response = @request.sync.get "/products"
+        expect(response.body).to.have.length 1
+        expect(response.body[0]).to.have.property '_id'
+        expect(response.body[0]).to.have.property 'optional', true
+
   describe 'edge cases', ->
     describe 'default on mongoose model', ->
       withModel (mongoose) ->
