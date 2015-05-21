@@ -512,7 +512,8 @@ module.exports = class ResourceSchema
   _generateSchemaFromModel: (Model) =>
     # Paths already in dot notation
     schemaKeys = Object.keys Model.schema.paths
-    schemaKeys.splice schemaKeys.indexOf('__v'), 1
+    if schemaKeys.indexOf('__v') >= 0
+      schemaKeys.splice schemaKeys.indexOf('__v'), 1
     schema = {}
     for schemaKey in schemaKeys
       instance = Model.schema.paths[schemaKey].instance
