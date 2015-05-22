@@ -49,7 +49,6 @@ module.exports = class ResourceSchema
       modelQuery = @Model.findOne(query)
       modelQuery.exec().then (model) =>
         return next boom.notFound("No resources found with #{paramId} of #{idValue}") if not model?
-        model = model.toObject()
         @_sendResource(model, requestContext)
       .then null, (err) =>
         @_handleRequestError(err, requestContext)
@@ -66,7 +65,6 @@ module.exports = class ResourceSchema
       modelQuery.limit(limit) if limit
       modelQuery.exec()
     .then (models) =>
-      models = _(models).invoke 'toObject'
       @_sendResources(models, requestContext)
     .then null, (err) =>
       @_handleRequestError(err, requestContext)

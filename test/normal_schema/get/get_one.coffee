@@ -57,7 +57,7 @@ suite 'GET one', ({withModel, withServer}) ->
           '_id'
           'name'
           extra:
-            get: (model) -> "Hello there #{model.name}!"
+            get: (model) -> "Hello there #{model.get 'name'}!"
         }
         @resource = new ResourceSchema @model, schema
 
