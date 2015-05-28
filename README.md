@@ -366,8 +366,6 @@ new ResourceSchema(Product, schema, {
 
 Like resolve on schema, but resolved variable available to every getter and setter on the resource.
 
-```
-
 ### queryParams: Object
 
 Define query parameters for this resource. Note, you could define these directly on the schema, but some people prefer to separate query parameters from all other fields.
