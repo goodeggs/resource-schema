@@ -60,9 +60,10 @@ module.exports = class ResourceSchema
     @_getMongoQuery(requestContext).then (mongoQuery) =>
       # normal (non aggregate) resource
       modelQuery = @Model.find(mongoQuery)
-
       limit = @_getLimit req.query
       modelQuery.limit(limit) if limit
+      skip = req.query.$skip
+      modelQuery.skip(skip) if skip
       modelQuery.exec()
     .then (models) =>
       @_sendResources(models, requestContext)

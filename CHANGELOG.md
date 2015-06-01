@@ -1,3 +1,8 @@
+# 0.19.0
+
+## Features
+- add $skip query
+
 # 0.15.0
 
 ## Features

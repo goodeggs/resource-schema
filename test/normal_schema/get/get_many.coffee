@@ -267,6 +267,30 @@ suite 'GET many', ({withModel, withServer}) ->
         expect(response.statusCode).to.equal 200
         expect(response.body.length).to.equal 2
 
+    describe '$skip', ->
+      withModel (mongoose) ->
+        mongoose.Schema { name: String }
+
+      beforeEach fibrous ->
+        @model.sync.create { name: 'Bilbo' }
+        @model.sync.create { name: 'Frodo' }
+        @model.sync.create { name: 'Mary' }
+        @model.sync.create { name: 'Pippin' }
+
+        schema = { 'name' }
+        @resource = new ResourceSchema @model, schema
+
+      withServer (app) ->
+        app.get '/characters', @resource.get(), @resource.send
+
+      it 'skips results', fibrous ->
+        response = @request.sync.get
+          url: '/characters?$skip=1',
+          json: true
+
+        expect(response.statusCode).to.equal 200
+        expect(response.body.length).to.equal 3
+
     describe '$select', ->
       describe 'normal field', ->
         withModel (mongoose) ->
