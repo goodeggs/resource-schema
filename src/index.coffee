@@ -70,8 +70,13 @@ module.exports = class ResourceSchema
       sort = @_getSort req.query
       modelQuery.sort(sort) if sort
 
-      modelQuery.exec()
-    .then (models) =>
+      q.all [
+        modelQuery.exec()
+        @_getResourceCount(req.query)
+      ]
+    .then ([models, modelCount]) =>
+      if modelCount
+        res.set 'x-resource-count', modelCount
       @_sendResources(models, requestContext)
     .then null, (err) =>
       @_handleRequestError(err, requestContext)
@@ -770,3 +775,11 @@ module.exports = class ResourceSchema
     {req, res, next} = requestContext
     return next boom.badRequest(err.message) if err.name in ['CastError', 'ValidationError']
     next boom.wrap(err)
+
+  _getResourceCount: (query) ->
+    if query.$addResourceCount
+      return @Model.count()
+    else
+      d = q.defer()
+      d.resolve(undefined)
+      return d.promise

@@ -563,6 +563,14 @@ Sort the returned documents
 GET /products?$sort=name&$sort=-price
 ```
 
+### $addResourceCount
+
+Add total resource count to the response headers as 'x-resource-count'. Calculating number of pages.
+
+```
+GET /products?$addResourceCount=true
+```
+
 ### $add
 
 Add an optional field to the resource. See optional schema field for more details.

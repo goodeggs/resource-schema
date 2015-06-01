@@ -267,6 +267,40 @@ suite 'GET many', ({withModel, withServer}) ->
         expect(response.statusCode).to.equal 200
         expect(response.body.length).to.equal 2
 
+    describe '$addResourceCount', ->
+      withModel (mongoose) ->
+        mongoose.Schema { name: String }
+
+      beforeEach fibrous ->
+        @model.sync.create { name: 'Bilbo' }
+        @model.sync.create { name: 'Frodo' }
+        @model.sync.create { name: 'Mary' }
+        @model.sync.create { name: 'Pippin' }
+
+        schema = { 'name' }
+        @resource = new ResourceSchema @model, schema
+
+      withServer (app) ->
+        app.get '/characters', @resource.get(), @resource.send
+
+      it 'returns resource count in header', fibrous ->
+        response = @request.sync.get
+          url: '/characters?$limit=2&$addResourceCount=true',
+          json: true
+
+        expect(response.statusCode).to.equal 200
+        expect(response.body.length).to.equal 2
+        expect(response.headers['x-resource-count']).to.equal '4'
+
+      it 'doesnt add resource count if not in query parameter', fibrous ->
+        response = @request.sync.get
+          url: '/characters?$limit=2',
+          json: true
+
+        expect(response.statusCode).to.equal 200
+        expect(response.body.length).to.equal 2
+        expect(response.headers['x-resource-count']).to.be.undefined
+
     describe '$skip', ->
       withModel (mongoose) ->
         mongoose.Schema { name: String }

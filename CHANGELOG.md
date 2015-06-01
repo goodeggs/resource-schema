@@ -3,6 +3,7 @@
 ## Features
 - add $skip query
 - add $sort query
+- add $addResourceCount query
 
 # 0.15.0
 
