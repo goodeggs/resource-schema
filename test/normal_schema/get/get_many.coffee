@@ -1,3 +1,4 @@
+_ = require 'underscore'
 fibrous = require 'fibrous'
 mongoose = require 'mongoose'
 expect = require('chai').expect
@@ -133,8 +134,9 @@ suite 'GET many', ({withModel, withServer}) ->
           json: true
 
         expect(response.body.length).to.equal 2
-        expect(response.body[0].price).to.equal 20
-        expect(response.body[1].price).to.equal 27
+        priceValues = _(response.body).pluck('price')
+        expect(priceValues).to.include 20
+        expect(priceValues).to.include 27
 
     describe 'optional', ->
       withModel (mongoose) ->
@@ -653,10 +655,8 @@ suite 'GET many', ({withModel, withServer}) ->
 
         expect(response.statusCode).to.equal 200
         expect(response.body.length).to.equal 2
-        expect(response.body[0].name).to.equal 'Bilbo'
-        expect(response.body[0].orderCount).to.equal 5
-        expect(response.body[1].name).to.equal 'Frodo'
-        expect(response.body[1].orderCount).to.equal 10
+        expect(_(response.body).findWhere({name: 'Bilbo'})).to.have.property 'orderCount', 5
+        expect(_(response.body).findWhere({name: 'Frodo'})).to.have.property 'orderCount', 10
 
     describe 'limit', ->
       withModel (mongoose) ->
@@ -709,8 +709,9 @@ suite 'GET many', ({withModel, withServer}) ->
 
         expect(response.statusCode).to.equal 200
         expect(response.body.length).to.equal 2
-        expect(response.body[0].name).to.equal 'Bilbo'
-        expect(response.body[1].name).to.equal 'Frodo'
+        nameValues = _(response.body).pluck('name')
+        expect(nameValues).to.include 'Bilbo'
+        expect(nameValues).to.include 'Frodo'
 
   describe 'using reserved keywords in schema', ->
     describe 'type', ->
