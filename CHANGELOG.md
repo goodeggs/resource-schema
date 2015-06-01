@@ -2,6 +2,7 @@
 
 ## Features
 - add $skip query
+- add $sort query
 
 # 0.15.0
 

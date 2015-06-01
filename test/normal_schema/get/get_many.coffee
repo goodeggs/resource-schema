@@ -291,6 +291,68 @@ suite 'GET many', ({withModel, withServer}) ->
         expect(response.statusCode).to.equal 200
         expect(response.body.length).to.equal 3
 
+    describe '$sort', ->
+      withModel (mongoose) ->
+        mongoose.Schema { name: String, age: Number }
+
+      beforeEach fibrous ->
+        @model.sync.create { name: 'Mary', age: 50 }
+        @model.sync.create { name: 'Mary', age: 100 }
+        @model.sync.create { name: 'Pippin', age: 50  }
+        @model.sync.create { name: 'Bilbo', age: 50 }
+        @model.sync.create { name: 'Frodo', age: 50 }
+
+        schema = { 'name', 'age' }
+        @resource = new ResourceSchema @model, schema
+
+      withServer (app) ->
+        app.get '/characters', @resource.get(), @resource.send
+
+      it 'sorts results ascending', fibrous ->
+        response = @request.sync.get
+          url: '/characters?$sort=name',
+          json: true
+
+        expect(response.statusCode).to.equal 200
+        expect(response.body.length).to.equal 5
+        expect(response.body[0]).to.have.property 'name', 'Bilbo'
+        expect(response.body[1]).to.have.property 'name', 'Frodo'
+        expect(response.body[2]).to.have.property 'name', 'Mary'
+        expect(response.body[3]).to.have.property 'name', 'Mary'
+        expect(response.body[4]).to.have.property 'name', 'Pippin'
+
+      it 'sorts results descending', fibrous ->
+        response = @request.sync.get
+          url: '/characters?$sort=-name',
+          json: true
+
+        expect(response.statusCode).to.equal 200
+        expect(response.body.length).to.equal 5
+        expect(response.body[4]).to.have.property 'name', 'Bilbo'
+        expect(response.body[3]).to.have.property 'name', 'Frodo'
+        expect(response.body[2]).to.have.property 'name', 'Mary'
+        expect(response.body[1]).to.have.property 'name', 'Mary'
+        expect(response.body[0]).to.have.property 'name', 'Pippin'
+
+      it 'sorts by multiple values', fibrous ->
+        response = @request.sync.get
+          url: '/characters?$sort=name&$sort=age',
+          json: true
+
+        expect(response.statusCode).to.equal 200
+        expect(response.body.length).to.equal 5
+
+        expect(response.body[0]).to.have.property 'name', 'Bilbo'
+        expect(response.body[1]).to.have.property 'name', 'Frodo'
+
+        expect(response.body[2]).to.have.property 'name', 'Mary'
+        expect(response.body[2]).to.have.property 'age', 50
+
+        expect(response.body[3]).to.have.property 'name', 'Mary'
+        expect(response.body[3]).to.have.property 'age', 100
+
+        expect(response.body[4]).to.have.property 'name', 'Pippin'
+
     describe '$select', ->
       describe 'normal field', ->
         withModel (mongoose) ->

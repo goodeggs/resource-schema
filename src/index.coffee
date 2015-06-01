@@ -60,10 +60,16 @@ module.exports = class ResourceSchema
     @_getMongoQuery(requestContext).then (mongoQuery) =>
       # normal (non aggregate) resource
       modelQuery = @Model.find(mongoQuery)
+
       limit = @_getLimit req.query
       modelQuery.limit(limit) if limit
+
       skip = req.query.$skip
       modelQuery.skip(skip) if skip
+
+      sort = @_getSort req.query
+      modelQuery.sort(sort) if sort
+
       modelQuery.exec()
     .then (models) =>
       @_sendResources(models, requestContext)
@@ -393,6 +399,17 @@ module.exports = class ResourceSchema
   ###
   _getLimit: (query) =>
     query.$limit or @options.limit or 1000
+
+  ###
+  Get mongoose value to use for sorting the results.
+  @param [Object] query - req.query.$sort must be an array or string
+  @returns [String] Space separated sort string
+  ###
+  _getSort: (query) =>
+    if Array.isArray query.$sort
+      return query.$sort.join(' ')
+    else if typeof query.$sort is 'string'
+      return query.$sort
 
   ###
   Get resource fields that will be returned with this request. Reject everything

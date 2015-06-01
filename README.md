@@ -547,13 +547,20 @@ Limit the number of resources to return in the response
 ```
 GET /products?$limit=10
 
-
 ### $skip
 
 Skip number of documents
 
 ```
 GET /products?$skip=5
+```
+
+### $sort
+
+Sort the returned documents
+
+```
+GET /products?$sort=name&$sort=-price
 ```
 
 ### $add
