@@ -76,6 +76,10 @@ module.exports = class ResourceSchema
       ]
     .then ([models, modelCount]) =>
       if modelCount
+        do -> # allow browsers to read x-resource-count
+          allowHeaders = res.get 'Access-Control-Expose-Headers'
+          allowHeaders = if allowHeaders? then "#{allowHeaders},x-resource-count" else 'x-resource-count'
+          res.set 'Access-Control-Expose-Headers', allowHeaders
         res.set 'x-resource-count', modelCount
       @_sendResources(models, requestContext)
     .then null, (err) =>
