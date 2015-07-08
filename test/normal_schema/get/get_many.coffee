@@ -269,7 +269,7 @@ suite 'GET many', ({withModel, withServer}) ->
         expect(response.statusCode).to.equal 200
         expect(response.body.length).to.equal 2
 
-    describe.only '$addResourceCount', ->
+    describe '$addResourceCount', ->
       withModel (mongoose) ->
         mongoose.Schema { name: String, isHobbit: Boolean }
 
