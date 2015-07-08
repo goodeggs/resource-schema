@@ -72,7 +72,7 @@ module.exports = class ResourceSchema
 
       q.all [
         modelQuery.exec()
-        @_getResourceCount(req.query)
+        @_getResourceCount(mongoQuery, requestContext)
       ]
     .then ([models, modelCount]) =>
       if modelCount
@@ -780,9 +780,10 @@ module.exports = class ResourceSchema
     return next boom.badRequest(err.message) if err.name in ['CastError', 'ValidationError']
     next boom.wrap(err)
 
-  _getResourceCount: (query) ->
-    if query.$addResourceCount
-      return @Model.count()
+  _getResourceCount: (mongoQuery, requestContext) ->
+    {req, res, next} = requestContext
+    if req.query.$addResourceCount
+      return @Model.count(mongoQuery)
     else
       d = q.defer()
       d.resolve(undefined)

@@ -269,29 +269,30 @@ suite 'GET many', ({withModel, withServer}) ->
         expect(response.statusCode).to.equal 200
         expect(response.body.length).to.equal 2
 
-    describe '$addResourceCount', ->
+    describe.only '$addResourceCount', ->
       withModel (mongoose) ->
-        mongoose.Schema { name: String }
+        mongoose.Schema { name: String, isHobbit: Boolean }
 
       beforeEach fibrous ->
-        @model.sync.create { name: 'Bilbo' }
-        @model.sync.create { name: 'Frodo' }
-        @model.sync.create { name: 'Mary' }
-        @model.sync.create { name: 'Pippin' }
+        @model.sync.create { name: 'Bilbo', isHobbit: true }
+        @model.sync.create { name: 'Frodo', isHobbit: true  }
+        @model.sync.create { name: 'Mary', isHobbit: true  }
+        @model.sync.create { name: 'Pippin', isHobbit: true  }
+        @model.sync.create { name: 'Gandalf', isHobbit: false  }
 
-        schema = { 'name' }
+        schema = { 'name', 'isHobbit' }
         @resource = new ResourceSchema @model, schema
 
       withServer (app) ->
         app.get '/characters', @resource.get(), @resource.send
 
-      it 'returns resource count in header', fibrous ->
+      it 'total resource count for non-limited query in header', fibrous ->
         response = @request.sync.get
-          url: '/characters?$limit=2&$addResourceCount=true',
+          url: '/characters?$limit=1&isHobbit=true&$addResourceCount=true',
           json: true
 
         expect(response.statusCode).to.equal 200
-        expect(response.body.length).to.equal 2
+        expect(response.body.length).to.equal 1
         expect(response.headers['x-resource-count']).to.equal '4'
 
       it 'doesnt add resource count if not in query parameter', fibrous ->

@@ -566,7 +566,7 @@ GET /products?$sort=name&$sort=-price
 
 ### $addResourceCount
 
-Add total resource count to the response headers as 'x-resource-count'. Calculating number of pages.
+Count total number of resources that would be available for this query if results were not limited. The result is added in the response header as 'x-resource-count'. This is useful for calculating total number of pages when paginating.
 
 ```
 GET /products?$addResourceCount=true
