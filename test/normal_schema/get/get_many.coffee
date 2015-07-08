@@ -286,7 +286,7 @@ suite 'GET many', ({withModel, withServer}) ->
       withServer (app) ->
         app.get '/characters', @resource.get(), @resource.send
 
-      it 'total resource count for non-limited query in header', fibrous ->
+      it 'calculates what the total resource count would be if the query were not limited', fibrous ->
         response = @request.sync.get
           url: '/characters?$limit=1&isHobbit=true&$addResourceCount=true',
           json: true
@@ -295,7 +295,7 @@ suite 'GET many', ({withModel, withServer}) ->
         expect(response.body.length).to.equal 1
         expect(response.headers['x-resource-count']).to.equal '4'
 
-      it 'doesnt add resource count if not in query parameter', fibrous ->
+      it 'doesnt add resource count if $addResourceCount not included', fibrous ->
         response = @request.sync.get
           url: '/characters?$limit=2',
           json: true
