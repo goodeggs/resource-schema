@@ -107,13 +107,7 @@ module.exports = class ResourceSchema
 
     @_extendQueryWithImplicitOptionalFields([resource], requestContext)
 
-    model = @_convertResourceFieldsToModelFields resource
-    resourceByModelId = {}
-    resourceByModelId[model._id.toString()] = resource
-
-    @_buildContext(requestContext, [resource], [model]).then =>
-      @_applySetters(resourceByModelId, [model], requestContext)
-      model = new @Model(model)
+    @createModelFromResource(resource, requestContext).then (model) ->
       deferred = q.defer()
       model.save (err, modelSaved) ->
         if err?
@@ -126,6 +120,35 @@ module.exports = class ResourceSchema
       @_sendResource(modelSaved, requestContext)
     .then null, (err) =>
       @_handleRequestError(err, requestContext)
+
+  ###
+  @returns {Promise} resolves to model
+  ###
+  createModelFromResource: (resource, requestContext) ->
+    {req, res, next} = requestContext
+    model = @_convertResourceFieldsToModelFields resource
+    resourceByModelId = {}
+    resourceByModelId[model._id.toString()] = resource
+
+    @_buildContext(requestContext, [resource], [model]).then =>
+      @_applySetters(resourceByModelId, [model], requestContext)
+      return new @Model(model)
+
+  ###
+  @returns {Promise} resolves to model
+  ###
+  createModelsFromResources: (resources, requestContext) ->
+    {req, res, next} = requestContext
+    resourceByModelId = {}
+
+    models = resources.map (resource) =>
+      model = @_convertResourceFieldsToModelFields(resource)
+      resourceByModelId[model._id.toString()] = resource
+      model
+
+    @_buildContext(requestContext, resources, models).then =>
+      @_applySetters(resourceByModelId, models, requestContext)
+      return models.map (model) => new @Model(model)
 
   _postMany: (req, res, next) ->
     requestContext = {req, res, next}
@@ -140,17 +163,10 @@ module.exports = class ResourceSchema
 
     @_extendQueryWithImplicitOptionalFields(resources, requestContext)
 
-    resourceByModelId = {}
-    models = resources.map (resource) =>
-      model = @_convertResourceFieldsToModelFields(resource)
-      resourceByModelId[model._id.toString()] = resource
-      model
-
-    @_buildContext(requestContext, resources, models).then =>
-      d = q.defer()
-      @_applySetters(resourceByModelId, models, requestContext)
+    @createModelsFromResources(resources, requestContext).then (models) =>
       # must create custom promise here b/c $q does not pass splat arguments
-      @Model.create models, (err, modelsSaved...) ->
+      d = q.defer()
+      @Model.create models, (err, modelsSaved...) =>
         # so that we are compatible with api of both mongoose 3.8.x and 4.0.x...
         modelsSaved = if Array.isArray(modelsSaved[0]) then modelsSaved[0] else modelsSaved
 
@@ -733,35 +749,52 @@ module.exports = class ResourceSchema
 
     q.all(resolvePromises).then -> requestContext
 
-  _sendResource: (model, requestContext) ->
+  ###
+  @returns Promise
+  ###
+  createResourceFromModel: (model, requestContext) ->
     {req, res, next} = requestContext
     resource = @_convertModelFieldsToResourceFields(model, requestContext)
     resourceByModelId = {}
     resourceByModelId[model._id.toString()] = resource
     @_buildContext(requestContext, [resource], [model]).then =>
       @_applyGetters(resourceByModelId, [model], requestContext)
+      return resource
+
+  _sendResource: (model, requestContext) ->
+    {req, res, next} = requestContext
+    @createResourceFromModel(model, requestContext).then (resource) ->
       res.body = resource
       next()
     .then null, (err) ->
       next boom.wrap err
 
-  _sendResources: (models, requestContext) ->
+  ###
+  @returns Promise
+  ###
+  createResourcesFromModels: (models, requestContext) ->
     {req, res, next} = requestContext
-
     resourceByModelId = {}
     resources = models.map (model) =>
       resource = @_convertModelFieldsToResourceFields(model, requestContext)
       resourceByModelId[model._id.toString()] = resource
       resource
-
     @_buildContext(requestContext, resources, models).then =>
       @_applyGetters(resourceByModelId, models, requestContext)
       @_applyFilters(resources, requestContext)
     .then (resources) =>
+      resources
+
+
+  _sendResources: (models, requestContext) ->
+    {req, res, next} = requestContext
+
+    @createResourcesFromModels(models, requestContext).then (resources) ->
       res.body = resources
       next()
     .then null, (err) ->
       next boom.wrap err
+
 
   ###
   When doing PUT or POST requests, if optional fields are on the resource, attach
