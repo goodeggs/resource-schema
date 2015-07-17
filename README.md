@@ -3,7 +3,9 @@
 [![NPM version](https://badge.fury.io/js/resource-schema.png)](http://badge.fury.io/js/resource-schema)
 [![Build Status](https://travis-ci.org/goodeggs/mongoose-resource.png)](https://travis-ci.org/goodeggs/resource-schema)
 
-Define schemas for RESTful resources from mongoose models, and generate express middleware to GET, POST, PUT, and DELETE to those resources.
+Define a translation "schema" between mongoose models and API resources. Once you do this, you can:
+- Call methods to convert your models to resources and resources to models.
+- Generate express middleware handle GET, POST, PUT, and DELETE requests for that resource.
 
 ## Table of Contents
 
@@ -12,6 +14,7 @@ Define schemas for RESTful resources from mongoose models, and generate express 
 - [Creating a Resource](#creating-a-resource)
 - [Defining a Schema](#defining-a-schema)
 - [Options](#options)
+- [Converting With Methods](#converting-with-methods)
 - [Generating Middleware](#generating-middleware)
 - [Query Parameters](#query-parameters)
 - [Contributing](#contributing)
@@ -20,7 +23,13 @@ Define schemas for RESTful resources from mongoose models, and generate express 
 
 ## Why ResourceSchema?
 
-ResourceSchema allows you to define complex RESTful resources in a simple and declarative way.
+ResourceSchema abstracts a lot of the boilerplate when creating API endpoints for RESTful resources. It helps you:
+- translate models to and from their corresponding resource representation
+- validate values
+- handle for malformed data
+- automatically convert url query parameters to their corresponding mongoose query parameters.
+
+All of wich allows you to focus on higher-level resource design.
 
 ```javascript
 Product = require './models/product'
@@ -88,9 +97,6 @@ app.put('products/:_id', resource.put('_id'), resource.send);
 app.get('products/:_id', resource.get('_id'), resource.send);
 app.delete('products/:_id', resource.delete('_id'), resource.send);
 ```
-This abstracts away a lot of the boilerplate such as building queries, validating values, and handling errors, and allows you to focus on higher-level resource design.
-
-Additionally, this provides a layer of abstraction which helps decouple your server models from your client.
 
 ## Install
 ```
@@ -391,6 +397,24 @@ new ResourceSchema(Product, schema, {
 })
 
 ```
+
+## Converting with Methods
+
+### .createModelFromResource(model, {req, res, next})
+
+Convert from model representation to resource representation
+
+### .createModelsFromResources(models, {req, res, next})
+
+Convert from multiple model representations to their corresponding resource representations
+
+### .createResourceFromModel(resource, {req, res, next})
+
+Convert from resource representation to model representation
+
+### .createResourcesFromModels(resources, {req, res, next})
+
+Convert from multiple resource representations to their corresponding model representations
 
 ## Generating Middleware
 
