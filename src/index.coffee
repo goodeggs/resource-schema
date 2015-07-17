@@ -107,7 +107,7 @@ module.exports = class ResourceSchema
 
     @_extendQueryWithImplicitOptionalFields([resource], requestContext)
 
-    model = @_createModelFromResource resource
+    model = @_convertResourceFieldsToModelFields resource
     resourceByModelId = {}
     resourceByModelId[model._id.toString()] = resource
 
@@ -142,7 +142,7 @@ module.exports = class ResourceSchema
 
     resourceByModelId = {}
     models = resources.map (resource) =>
-      model = @_createModelFromResource(resource)
+      model = @_convertResourceFieldsToModelFields(resource)
       resourceByModelId[model._id.toString()] = resource
       model
 
@@ -215,7 +215,7 @@ module.exports = class ResourceSchema
       query = {}
       query[paramId] = idValue
 
-      model = @_createModelFromResource resource
+      model = @_convertResourceFieldsToModelFields resource
       model[paramId] = idValue
 
       resourceByModelId = {}
@@ -247,7 +247,7 @@ module.exports = class ResourceSchema
 
     resourceByModelId = {}
     models = resources.map (resource) =>
-      model = @_createModelFromResource(resource)
+      model = @_convertResourceFieldsToModelFields(resource)
       resourceByModelId[model._id.toString()] = resource
       model
 
@@ -343,7 +343,7 @@ module.exports = class ResourceSchema
   @param [Object] resource - resource to convert
   @returns [Object] model created from resource
   ###
-  _createModelFromResource: (resource) =>
+  _convertResourceFieldsToModelFields: (resource) =>
     return if not resource?
     model = {}
     for resourceField, config of @schema
@@ -357,7 +357,7 @@ module.exports = class ResourceSchema
   @param [Object] model - model to convert
   @returns [Object] resource created from model
   ###
-  _createResourceFromModel: (model, requestContext) =>
+  _convertModelFieldsToResourceFields: (model, requestContext) =>
     {req} = requestContext
     resource = {}
 
@@ -735,7 +735,7 @@ module.exports = class ResourceSchema
 
   _sendResource: (model, requestContext) ->
     {req, res, next} = requestContext
-    resource = @_createResourceFromModel(model, requestContext)
+    resource = @_convertModelFieldsToResourceFields(model, requestContext)
     resourceByModelId = {}
     resourceByModelId[model._id.toString()] = resource
     @_buildContext(requestContext, [resource], [model]).then =>
@@ -750,7 +750,7 @@ module.exports = class ResourceSchema
 
     resourceByModelId = {}
     resources = models.map (model) =>
-      resource = @_createResourceFromModel(model, requestContext)
+      resource = @_convertModelFieldsToResourceFields(model, requestContext)
       resourceByModelId[model._id.toString()] = resource
       resource
 
