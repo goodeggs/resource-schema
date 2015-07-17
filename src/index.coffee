@@ -25,6 +25,63 @@ module.exports = class ResourceSchema
     @defaultResourceFields = @resourceFields.filter((field) => not @schema[field].optional)
 
   ###
+  @returns {Promise} resolves to model
+  ###
+  createModelFromResource: (resource, requestContext) ->
+    {req, res, next} = requestContext
+    model = @_convertResourceFieldsToModelFields resource
+    resourceByModelId = {}
+    resourceByModelId[model._id.toString()] = resource
+
+    @_buildContext(requestContext, [resource], [model]).then =>
+      @_applySetters(resourceByModelId, [model], requestContext)
+      return new @Model(model)
+
+  ###
+  @returns {Promise} resolves to model
+  ###
+  createModelsFromResources: (resources, requestContext) ->
+    {req, res, next} = requestContext
+    resourceByModelId = {}
+
+    models = resources.map (resource) =>
+      model = @_convertResourceFieldsToModelFields(resource)
+      resourceByModelId[model._id.toString()] = resource
+      model
+
+    @_buildContext(requestContext, resources, models).then =>
+      @_applySetters(resourceByModelId, models, requestContext)
+      return models.map (model) => new @Model(model)
+
+  ###
+  @returns Promise
+  ###
+  createResourceFromModel: (model, requestContext) ->
+    {req, res, next} = requestContext
+    resource = @_convertModelFieldsToResourceFields(model, requestContext)
+    resourceByModelId = {}
+    resourceByModelId[model._id.toString()] = resource
+    @_buildContext(requestContext, [resource], [model]).then =>
+      @_applyGetters(resourceByModelId, [model], requestContext)
+      return resource
+
+  ###
+  @returns Promise
+  ###
+  createResourcesFromModels: (models, requestContext) ->
+    {req, res, next} = requestContext
+    resourceByModelId = {}
+    resources = models.map (model) =>
+      resource = @_convertModelFieldsToResourceFields(model, requestContext)
+      resourceByModelId[model._id.toString()] = resource
+      resource
+    @_buildContext(requestContext, resources, models).then =>
+      @_applyGetters(resourceByModelId, models, requestContext)
+      @_applyFilters(resources, requestContext)
+    .then (resources) =>
+      resources
+
+  ###
   Generate middleware to handle GET requests for resource
   ###
   get: (paramId) ->
@@ -121,35 +178,6 @@ module.exports = class ResourceSchema
     .then null, (err) =>
       @_handleRequestError(err, requestContext)
 
-  ###
-  @returns {Promise} resolves to model
-  ###
-  createModelFromResource: (resource, requestContext) ->
-    {req, res, next} = requestContext
-    model = @_convertResourceFieldsToModelFields resource
-    resourceByModelId = {}
-    resourceByModelId[model._id.toString()] = resource
-
-    @_buildContext(requestContext, [resource], [model]).then =>
-      @_applySetters(resourceByModelId, [model], requestContext)
-      return new @Model(model)
-
-  ###
-  @returns {Promise} resolves to model
-  ###
-  createModelsFromResources: (resources, requestContext) ->
-    {req, res, next} = requestContext
-    resourceByModelId = {}
-
-    models = resources.map (resource) =>
-      model = @_convertResourceFieldsToModelFields(resource)
-      resourceByModelId[model._id.toString()] = resource
-      model
-
-    @_buildContext(requestContext, resources, models).then =>
-      @_applySetters(resourceByModelId, models, requestContext)
-      return models.map (model) => new @Model(model)
-
   _postMany: (req, res, next) ->
     requestContext = {req, res, next}
     resources = req.body
@@ -191,6 +219,7 @@ module.exports = class ResourceSchema
       @_putMany
 
   _upsertOne: (query, updatedModel) ->
+    updatedModel = updatedModel.toObject()
     deferred = q.defer()
 
     @Model.findOne query, (err, modelFound) =>
@@ -230,14 +259,9 @@ module.exports = class ResourceSchema
       idValue = req.params[paramId]
       query = {}
       query[paramId] = idValue
+      resource[paramId] ?= idValue
 
-      model = @_convertResourceFieldsToModelFields resource
-      model[paramId] = idValue
-
-      resourceByModelId = {}
-      resourceByModelId[model._id.toString()] = resource
-      @_buildContext(requestContext, [resource], [model]).then =>
-        @_applySetters(resourceByModelId, [model], requestContext)
+      @createModelFromResource(resource, requestContext).then (model) =>
         @_upsertOne(query, model)
       .then (model) =>
         return next boom.notFound() if not model?
@@ -261,14 +285,7 @@ module.exports = class ResourceSchema
 
     @_extendQueryWithImplicitOptionalFields(resources, requestContext)
 
-    resourceByModelId = {}
-    models = resources.map (resource) =>
-      model = @_convertResourceFieldsToModelFields(resource)
-      resourceByModelId[model._id.toString()] = resource
-      model
-
-    @_buildContext(requestContext, resources, models).then =>
-      @_applySetters(resourceByModelId, models, requestContext)
+    @createModelsFromResources(resources, requestContext).then (models) =>
       savePromises = models.map (model) =>
         modelId = model._id
         delete model._id
@@ -749,18 +766,6 @@ module.exports = class ResourceSchema
 
     q.all(resolvePromises).then -> requestContext
 
-  ###
-  @returns Promise
-  ###
-  createResourceFromModel: (model, requestContext) ->
-    {req, res, next} = requestContext
-    resource = @_convertModelFieldsToResourceFields(model, requestContext)
-    resourceByModelId = {}
-    resourceByModelId[model._id.toString()] = resource
-    @_buildContext(requestContext, [resource], [model]).then =>
-      @_applyGetters(resourceByModelId, [model], requestContext)
-      return resource
-
   _sendResource: (model, requestContext) ->
     {req, res, next} = requestContext
     @createResourceFromModel(model, requestContext).then (resource) ->
@@ -768,22 +773,6 @@ module.exports = class ResourceSchema
       next()
     .then null, (err) ->
       next boom.wrap err
-
-  ###
-  @returns Promise
-  ###
-  createResourcesFromModels: (models, requestContext) ->
-    {req, res, next} = requestContext
-    resourceByModelId = {}
-    resources = models.map (model) =>
-      resource = @_convertModelFieldsToResourceFields(model, requestContext)
-      resourceByModelId[model._id.toString()] = resource
-      resource
-    @_buildContext(requestContext, resources, models).then =>
-      @_applyGetters(resourceByModelId, models, requestContext)
-      @_applyFilters(resources, requestContext)
-    .then (resources) =>
-      resources
 
 
   _sendResources: (models, requestContext) ->
