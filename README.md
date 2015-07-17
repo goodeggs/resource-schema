@@ -5,7 +5,7 @@
 
 Define a translation "schema" between mongoose models and API resources. Once you do this, you can:
 - Call methods to convert your models to resources and resources to models.
-- Generate express middleware handle GET, POST, PUT, and DELETE requests for that resource.
+- Generate express middleware to handle GET, POST, PUT, and DELETE requests for that resource.
 
 ## Table of Contents
 
