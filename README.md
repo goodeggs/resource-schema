@@ -31,6 +31,10 @@ ResourceSchema abstracts a lot of the boilerplate when creating API endpoints fo
 
 All of wich allows you to focus on higher-level resource design.
 
+## Usage
+
+Create a schema translation:
+
 ```javascript
 Product = require './models/product'
 
@@ -88,14 +92,20 @@ var schema = {
   }
 };
 
-var resource = new ResourceSchema(Product, schema);
+module.exports = new ResourceSchema(Product, schema);
+```
+
+Then generate middleware to automatically handle requests for the resource:
+
+```coffee
+resourceConverter = require './resource-converter'
 
 // generate express middleware that automatically handles GET, POST, PUT, and DELETE requests:
-app.get('/products', resource.get(), resource.send);
-app.post('/products', resource.post(), resource.send);
-app.put('products/:_id', resource.put('_id'), resource.send);
-app.get('products/:_id', resource.get('_id'), resource.send);
-app.delete('products/:_id', resource.delete('_id'), resource.send);
+app.get('/products', resourceConverter.get(), resourceConverter.send);
+app.post('/products', resourceConverter.post(), resourceConverter.send);
+app.put('products/:_id', resourceConverter.put('_id'), resourceConverter.send);
+app.get('products/:_id', resourceConverter.get('_id'), resourceConverter.send);
+app.delete('products/:_id', resourceConverter.delete('_id'), resourceConverter.send);
 ```
 
 ## Install
