@@ -97,7 +97,11 @@ module.exports = class ResourceSchema
 
       idValue = req.params[paramId]
       query = {}
-      query[paramId] = idValue
+      if @schema[paramId]?.field
+        query[@schema[paramId].field] = idValue
+      else
+        query[paramId] = idValue
+
       try
         @_convertTypes(query)
       catch err
