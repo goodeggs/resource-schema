@@ -255,3 +255,33 @@ suite 'PUT one', ({withModel, withServer}) ->
       response = @request.sync.put "/person/#{@michael._id}", json: {siblings: [{name: 'Jon', age:39, _id: @michael.siblings[1]._id}]}
       expect(response.statusCode).to.equal 200
 
+  given 'mongoose model field with default is already set, and resource does not contain the field', ->
+    withModel (mongoose) ->
+      mongoose.Schema
+        name: String
+        # mongoose arrays default to an empty array
+        siblings: [
+          name: String
+          age: type: Number, required: true
+        ]
+
+    withServer (app) ->
+      # resource does not contain the array...
+      @resource = new ResourceSchema @model, {'_id', 'name'}
+      app.put '/person/:_id', @resource.put('_id'), @resource.send
+
+    beforeEach fibrous ->
+      @michael = @model.sync.create name: 'Michael', siblings: [
+        {name: 'Matthew', age: 33},
+        {name: 'Jon', age: 38}
+      ]
+
+    it 'does not overwrite the model value with the default value', fibrous ->
+      response = @request.sync.put "/person/#{@michael._id}",
+        json:
+          name: 'Max'
+      expect(response.statusCode).to.equal 200
+      model = @model.sync.findById @michael._id
+      # the array still has both items (it was not overwritten with an empty array)
+      expect(model.siblings).to.have.length 2
+

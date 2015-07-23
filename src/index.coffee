@@ -27,7 +27,7 @@ module.exports = class ResourceSchema
   ###
   @returns {Promise} resolves to model
   ###
-  createModelFromResource: (resource, requestContext) ->
+  createModelFromResource: (resource, requestContext, returnRawObject=false) ->
     {req, res, next} = requestContext
     model = @_convertResourceFieldsToModelFields resource
     resourceByModelId = {}
@@ -35,12 +35,15 @@ module.exports = class ResourceSchema
 
     @_buildContext(requestContext, [resource], [model]).then =>
       @_applySetters(resourceByModelId, [model], requestContext)
-      return new @Model(model)
+      if returnRawObject
+        return model
+      else
+        return new @Model(model)
 
   ###
   @returns {Promise} resolves to model
   ###
-  createModelsFromResources: (resources, requestContext) ->
+  createModelsFromResources: (resources, requestContext, returnRawObjects=false) ->
     {req, res, next} = requestContext
     resourceByModelId = {}
 
@@ -51,7 +54,11 @@ module.exports = class ResourceSchema
 
     @_buildContext(requestContext, resources, models).then =>
       @_applySetters(resourceByModelId, models, requestContext)
-      return models.map (model) => new @Model(model)
+      return models.map (model) =>
+        if returnRawObjects
+          return model
+        else
+          return new @Model(model)
 
   ###
   @returns Promise
@@ -218,8 +225,13 @@ module.exports = class ResourceSchema
     else
       @_putMany
 
-  _upsertOne: (query, updatedModel) ->
-    updatedModel = updatedModel.toObject()
+  ###
+  @param {Object} query - query parameters
+  @param {Object} rawUpdatedModel - model that has not been wrapped as a mongoose model yet
+    - we do not want a mongoose model here because mongoose will add defaults and
+      populate empty arrays/objects. This would overwrite existing existing properties.
+  ###
+  _upsertOne: (query, rawUpdatedModel) ->
     deferred = q.defer()
 
     @Model.findOne query, (err, modelFound) =>
@@ -227,16 +239,16 @@ module.exports = class ResourceSchema
         deferred.reject(boom.wrap err)
 
       model = if modelFound
-        delete updatedModel._id
+        delete rawUpdatedModel._id
 
         # Unset any arrays to work around mongoose sub document validation bugs
-        _.keys(updatedModel)
-          .filter((key) -> updatedModel[key] instanceof Array)
+        _.keys(rawUpdatedModel)
+          .filter((key) -> rawUpdatedModel[key] instanceof Array)
           .forEach((key) -> modelFound[key] = undefined)
 
-        _.extend(modelFound, updatedModel)
+        _.extend(modelFound, rawUpdatedModel)
       else
-        new @Model(updatedModel)
+        new @Model(rawUpdatedModel)
 
       model.save (err, modelSaved) ->
         if err?
@@ -261,8 +273,8 @@ module.exports = class ResourceSchema
       query[paramId] = idValue
       resource[paramId] ?= idValue
 
-      @createModelFromResource(resource, requestContext).then (model) =>
-        @_upsertOne(query, model)
+      @createModelFromResource(resource, requestContext, true).then (rawModelObject) =>
+        @_upsertOne(query, rawModelObject)
       .then (model) =>
         return next boom.notFound() if not model?
         model = model.toObject()
@@ -285,12 +297,12 @@ module.exports = class ResourceSchema
 
     @_extendQueryWithImplicitOptionalFields(resources, requestContext)
 
-    @createModelsFromResources(resources, requestContext).then (models) =>
-      savePromises = models.map (model) =>
-        modelId = model._id
-        delete model._id
+    @createModelsFromResources(resources, requestContext, true).then (rawModels) =>
+      savePromises = rawModels.map (rawModel) =>
+        modelId = rawModel._id
+        delete rawModel._id
         throw boom.badRequest('_id required to update') if not modelId
-        @_upsertOne({_id: modelId}, model)
+        @_upsertOne({_id: modelId}, rawModel)
       q.all(savePromises)
     .then (updatedModels) =>
       updatedModels = _(updatedModels).invoke 'toObject'
