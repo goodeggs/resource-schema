@@ -48,6 +48,29 @@ suite 'GET one', ({withModel, withServer}) ->
         @model.findOne.restore()
         expect(response.statusCode).to.equal 500
 
+    describe 'with a resource that has a nested primary key', ->
+      withModel (mongoose) ->
+        mongoose.Schema
+          properties: {uniqueKey: String}
+          name: String
+
+      beforeEach ->
+        @resource = new ResourceSchema @model, name: 'name', uniqueKey: 'properties.uniqueKey'
+
+      withServer (app) ->
+        app.get '/res/:uniqueKey', @resource.get('uniqueKey'), @resource.send
+        app
+
+      it 'returns the object if found', fibrous ->
+        model = @model.sync.create
+          'name': 'Hello World'
+          'properties.uniqueKey': 'foobar'
+        response = @request.sync.get "/res/foobar"
+        expect(response.statusCode).to.equal 200
+        expect(response.body).to.deep.equal
+          name: 'Hello World'
+          uniqueKey: 'foobar'
+
     describe 'with a resource that has a synchronous dynamic field', ->
       withModel (mongoose) ->
         mongoose.Schema name: String
