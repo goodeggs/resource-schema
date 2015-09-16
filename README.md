@@ -29,7 +29,7 @@ ResourceSchema abstracts a lot of the boilerplate when creating API endpoints fo
 - handle for malformed data
 - automatically convert url query parameters to their corresponding mongoose query parameters.
 
-All of wich allows you to focus on higher-level resource design.
+All of which allows you to focus on higher-level resource design.
 
 ## Usage
 
