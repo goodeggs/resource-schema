@@ -82,7 +82,7 @@ suite 'GET one', ({withModel, withServer}) ->
           extra:
             get: (model) -> "Hello there #{model.get 'name'}!"
         }
-        @resource = new ResourceSchema @model, schema
+        @resource = new ResourceSchema @model, schema, {fat: true}
 
       withServer (app) ->
         app.get '/res/:_id', @resource.get('_id'), @resource.send
@@ -189,10 +189,10 @@ suite 'GET one', ({withModel, withServer}) ->
           name: {type: String, default: 'foo'}
 
       withServer (app) ->
-        @resource = new ResourceSchema @model, {'_id', 'name'}
+        @resource = new ResourceSchema @model, {'_id', 'name'}, {fat: true}
         app.get '/bar/:_id', @resource.get('_id'), @resource.send
 
-      it 'uses the mongoose schema defaults', fibrous ->
+      it 'uses the mongoose schema defaults with the fat model option', fibrous ->
         _id = new mongoose.Types.ObjectId()
         @model.collection.sync.insert {_id}
         response = @request.sync.get "/bar/#{_id}"
