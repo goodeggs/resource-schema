@@ -174,7 +174,7 @@ schema = {
 
 ### get: function(model, context)
 
-- **model** - corresponding mongoose model for requested resource
+- **model** - corresponding POJO model for requested resource (use the `fat: true` option on the ResourceSchema to get a mongoose model)
 - **context** - object containing req, res, next, and resolved values (see "resolve" for details)
 
 Dynamically get the value whenever a resource is requested.
@@ -183,7 +183,7 @@ Dynamically get the value whenever a resource is requested.
 var schema = {
   'fullName': {
     get: function (resource, context) {
-      resource.firtName + ' ' + resource.lastName
+      resource.firstName + ' ' + resource.lastName
     }
   }
 }

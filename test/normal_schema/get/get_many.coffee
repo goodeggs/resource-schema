@@ -756,10 +756,10 @@ suite 'GET many', ({withModel, withServer}) ->
           name: {type: String, default: 'foo'}
 
       withServer (app) ->
-        @resource = new ResourceSchema @model, {'_id', 'name'}
+        @resource = new ResourceSchema @model, {'_id', 'name'}, {fat: true}
         app.get '/bar', @resource.get(), @resource.send
 
-      it 'uses the mongoose schema defaults', fibrous ->
+      it 'uses the mongoose schema defaults with the fat model option', fibrous ->
         _id = new mongoose.Types.ObjectId()
         @model.collection.sync.insert {_id}
         response = @request.sync.get "/bar"
@@ -769,14 +769,12 @@ suite 'GET many', ({withModel, withServer}) ->
 
     describe 'default limit of 1000', ->
       withModel (mongoose) ->
-        mongoose.Schema name: String
-
-      beforeEach ->
-        @resource = new ResourceSchema @model
+        mongoose.Schema
+          name: String
 
       withServer (app) ->
+        @resource = new ResourceSchema @model, {'_id', 'name'}
         app.get '/res/', @resource.get(), @resource.send
-        app
 
       it 'sets a default limit of 1000', fibrous ->
         [0...1050].forEach (i) => @model.sync.create name: "model_#{i}"

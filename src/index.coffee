@@ -115,6 +115,9 @@ module.exports = class ResourceSchema
         return next boom.wrap err
 
       modelQuery = @Model.findOne(query)
+
+      modelQuery.lean() if not @options.fat
+
       modelQuery.exec().then (model) =>
         return next boom.notFound("No resources found with #{paramId} of #{idValue}") if not model?
         @_sendResource(model, requestContext)
@@ -137,6 +140,8 @@ module.exports = class ResourceSchema
 
       sort = @_getSort req.query
       modelQuery.sort(sort) if sort
+
+      modelQuery.lean() if not @options.fat
 
       q.all [
         modelQuery.exec()

@@ -1,3 +1,8 @@
+# 1.0.0
+
+## Breaking Changes
+- GET calls now make a lean query. If you need access to mongoose defaults, virtuals, etc. use `{fat: true}` as an option when defining the Resource.
+
 # 0.19.0
 
 ## Features
