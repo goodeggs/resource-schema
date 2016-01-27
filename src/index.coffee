@@ -456,12 +456,17 @@ module.exports = class ResourceSchema
         dot.set resource, resourceField, config.get(model, requestContext)
 
   ###
-  Get value to use for limiting query results. Defaults to 10000
+  Get value to use for limiting query results. Defaults to 1000
   @param [Object] query - query params from client
   @returns [Number] Max number of resources to return in response
   ###
   _getLimit: (query) =>
-    query.$limit or @options.limit or 1000
+    if query.$limit?
+      query.$limit
+    else if @options.limit?
+      @options.limit
+    else
+      1000
 
   ###
   Get mongoose value to use for sorting the results.

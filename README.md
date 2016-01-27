@@ -353,7 +353,7 @@ new ResourceSchema(Model, schema, {
 ```
 ### limit: Number
 
-Limit the number of returned documents for GET requests. Defaults to 1000.
+Limit the number of returned documents for GET requests. Defaults to 1000. 0 signifies unlimited.
 
 ``` javascript
 new ResourceSchema(Model, schema, {

@@ -1,3 +1,7 @@
+# 1.1.0
+## Features
+- $limit=0 and limit:0 can be used to return all matching results (unlimited)
+
 # 1.0.0
 
 ## Breaking Changes
