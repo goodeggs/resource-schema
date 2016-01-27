@@ -660,26 +660,41 @@ suite 'GET many', ({withModel, withServer}) ->
         expect(_(response.body).findWhere({name: 'Frodo'})).to.have.property 'orderCount', 10
 
     describe 'limit', ->
-      withModel (mongoose) ->
-        mongoose.Schema { name: String }
+      describe 'positive number', ->
+        withModel (mongoose) ->
+          mongoose.Schema { name: String }
 
-      withServer (app) ->
-        @resource = new ResourceSchema @model, { 'name' }, { limit: 2 }
-        app.get '/users', @resource.get(), @resource.send
+        withServer (app) ->
+          @resource = new ResourceSchema @model, { 'name' }, { limit: 2 }
+          app.get '/users', @resource.get(), @resource.send
 
-      beforeEach fibrous ->
-        @model.sync.create { name: 'Bilbo' }
-        @model.sync.create { name: 'Frodo' }
-        @model.sync.create { name: 'Mary' }
-        @model.sync.create { name: 'Pippin' }
+        beforeEach fibrous ->
+          @model.sync.create { name: 'Bilbo' }
+          @model.sync.create { name: 'Frodo' }
+          @model.sync.create { name: 'Mary' }
+          @model.sync.create { name: 'Pippin' }
 
-      it 'limits the returned documents', fibrous ->
-        response = @request.sync.get
-          url: '/users',
-          json: true
+        it 'limits the returned documents', fibrous ->
+          response = @request.sync.get
+            url: '/users',
+            json: true
 
-        expect(response.statusCode).to.equal 200
-        expect(response.body.length).to.equal 2
+          expect(response.statusCode).to.equal 200
+          expect(response.body.length).to.equal 2
+
+      describe 'unlimited', ->
+        withModel (mongoose) ->
+          mongoose.Schema
+            name: String
+
+        withServer (app) ->
+          @resource = new ResourceSchema @model, {'_id', 'name'}, {limit: 0}
+          app.get '/res/', @resource.get(), @resource.send
+
+        it 'returns all results with limit 0', fibrous ->
+          [0...1050].forEach (i) => @model.sync.create name: "model_#{i}"
+          response = @request.sync.get '/res/'
+          expect(response.body.length).to.equal 1050
 
     describe 'queryParams', ->
       withModel (mongoose) ->
