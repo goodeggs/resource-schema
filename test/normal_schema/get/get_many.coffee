@@ -849,3 +849,199 @@ suite 'GET many', ({withModel, withServer}) ->
 
         expect(response.body.length).to.equal 1
         expect(response.body[0].name).to.equal ''
+
+    describe 'find functions returning objects with duplicate keys', ->
+      given 'object values', ->
+        withModel (mongoose) ->
+          mongoose.Schema
+            price: Number
+
+        beforeEach fibrous ->
+          @model.sync.create price: 10
+          @model.sync.create price: 20
+          @model.sync.create price: 27
+          schema =
+            price: 'price'
+            minPrice:
+              find: (value) ->
+                'price': {$gt: value}
+            maxPrice:
+              find: (value) ->
+                'price': {$lt: value}
+
+          @resource = new ResourceSchema @model, schema
+
+        withServer (app) ->
+          app.get '/products', @resource.get(), @resource.send
+
+        it 'merges queries logically', fibrous ->
+          response = @request.sync.get
+            url: '/products?minPrice=15&maxPrice=22',
+            json: true
+
+          expect(response.statusCode).to.equal 200
+          expect(response.body.length).to.equal 1
+          expect(response.body[0].price).to.equal 20
+
+      given 'array values', ->
+        withModel (mongoose) ->
+          mongoose.Schema
+            costsMoney: Boolean
+            price: Number
+
+        beforeEach fibrous ->
+          @model.sync.create costsMoney: false, price: 97
+          @model.sync.create costsMoney: true, price: 0
+          @model.sync.create costsMoney: true, price: 1
+          @model.sync.create costsMoney: true, price: 6
+          @model.sync.create costsMoney: true, price: 10
+          @model.sync.create costsMoney: true, price: 15
+          @model.sync.create costsMoney: false, price: 25
+          schema =
+            'price': 'price'
+            'costsMoney': 'costsMoney'
+            'isFree':
+              find: ->
+                $or: [
+                  {costsMoney: false}
+                  {price: 0}
+                ]
+            'isMultipleOfThreeOrFive':
+              find: ->
+                $or: [
+                  {$where: "this.price % 3 == 0"}
+                  {$where: "this.price % 5 == 0"}
+                ]
+
+          @resource = new ResourceSchema @model, schema
+
+        withServer (app) ->
+          app.get '/products', @resource.get(), @resource.send
+
+        it 'merges queries logically', fibrous ->
+          response = @request.sync.get
+            url: '/products?isFree=true&isMultipleOfThreeOrFive=true',
+            json: true
+
+          # isFree should return 97, 0, 25
+          # isMultipleOfThreeOrFive should return 0, 6, 10, 15, 25
+          # intersection of both is 0, 25
+          expect(response.statusCode).to.equal 200
+          expect(response.body.length).to.equal 2
+          expect(response.body[0]).to.have.property 'price', 0
+          expect(response.body[1]).to.have.property 'price', 25
+
+      given '$and operators', ->
+        withModel (mongoose) ->
+          mongoose.Schema
+            price: Number
+            fee: Number
+            sweetDeal: Boolean
+
+        beforeEach fibrous ->
+          @model.sync.create price: 10, fee: 0, sweetDeal: false
+          @model.sync.create price: 10, fee: 2, sweetDeal: false
+          @model.sync.create price: 0, fee: 2, sweetDeal: true
+          @model.sync.create price: 0, fee: 0, sweetDeal: false
+          @model.sync.create price: 0, fee: 0, sweetDeal: true
+          schema =
+            'price': 'price'
+            'fee': 'fee'
+            'sweetDeal': 'sweetDeal'
+            'isFree':
+              find: ->
+                $and: [
+                  {price: 0}
+                  {fee: 0}
+                ]
+            'isReasonablyPriced':
+              find: ->
+                $and: [
+                  {price: $lte: 5}
+                  {fee: $lte: 2}
+                  {sweetDeal: true}
+                ]
+
+          @resource = new ResourceSchema @model, schema
+
+        withServer (app) ->
+          app.get '/products', @resource.get(), @resource.send
+
+        it 'merges queries logically', fibrous ->
+          response = @request.sync.get
+            url: '/products?isFree=true&isReasonablyPriced=true',
+            json: true
+
+          # isFree would return 4th and 5th
+          # isReasonablyPriced would return 3rd and 5th
+          # intersection is [5th]
+          expect(response.statusCode).to.equal 200
+          expect(response.body.length).to.equal 1
+          expect(response.body[0]).to.have.property 'price', 0
+          expect(response.body[0]).to.have.property 'sweetDeal', true
+
+      given 'primitive values', ->
+        withModel (mongoose) ->
+          mongoose.Schema
+            price: Number
+
+        beforeEach fibrous ->
+          @model.sync.create price: 0
+          @model.sync.create price: 1
+          @model.sync.create price: 15
+          schema =
+            price: 'price'
+            isFree:
+              find: (isFree) ->
+                'price': if isFree then 0 else $gt: 0
+            isEligibleForSaleAtDollarStores:
+              find: (isEligible) ->
+                'price': if isEligible then 1 else $ne: 1
+
+          @resource = new ResourceSchema @model, schema
+
+        withServer (app) ->
+          app.get '/products', @resource.get(), @resource.send
+
+        it 'merges queries logically', fibrous ->
+          response = @request.sync.get
+            url: '/products?isFree=true&isEligibleForSaleAtDollarStores=true',
+            json: true
+
+          expect(response.statusCode).to.equal 200
+          expect(response.body.length).to.equal 0
+          # no documents have both price: 0 and price: 1
+
+      given 'nested duplicate keys', ->
+        withModel (mongoose) ->
+          mongoose.Schema
+            product:
+              price: Number
+
+        beforeEach fibrous ->
+          @model.sync.create 'product.price': 0
+          @model.sync.create 'product.price': 1
+          @model.sync.create 'product.price': 15
+          schema =
+            'product.price': 'product.price'
+            isFree:
+              find: (isFree) ->
+                # intentionally not using dot notation to cause conflict at root AND second level
+                product: price: if isFree then 0 else $gt: 0
+            isEligibleForSaleAtDollarStores:
+              find: (isEligible) ->
+                product: price: if isEligible then 1 else $ne: 1
+
+          @resource = new ResourceSchema @model, schema
+
+        withServer (app) ->
+          app.get '/products', @resource.get(), @resource.send
+
+        it 'merges queries logically', fibrous ->
+          response = @request.sync.get
+            url: '/products?isFree=true&isEligibleForSaleAtDollarStores=true',
+            json: true
+
+          expect(response.statusCode).to.equal 200
+          expect(response.body.length).to.equal 0
+          # no documents have both price: 0 and price: 1
