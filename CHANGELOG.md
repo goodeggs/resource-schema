@@ -1,3 +1,8 @@
+# 1.2.0
+
+## Bugfixes
+- Finders returning duplicate query object keys with non-object values were getting clobbered in some cases
+
 # 1.1.0
 ## Features
 - $limit=0 and limit:0 can be used to return all matching results (unlimited)
