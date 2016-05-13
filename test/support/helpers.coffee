@@ -6,7 +6,7 @@ Boom = require 'boom'
 bodyParser = require 'body-parser'
 cookieParser = require 'cookie-parser'
 
-port = process.env.PORT || 93280
+port = process.env.PORT || 65535
 
 suiteHelpers =
   withModel: (args...) ->

@@ -353,6 +353,24 @@ module.exports = class ResourceSchema
     {req, res, next} = requestContext
     requestQuery = req.query
 
+    # Express middleware has two representations for arrays:
+    #   arrQueryParam: [elem1, elem2, elem3]
+    #             and
+    #   arrQueryParam: {'0': elem1, '1': elem2, '3': elem4}
+    #
+    #   Apparently, express switches from the first to second representation after certain
+    #   threshold in array size.
+    #
+    # _objectIsArray method checks if object is compatible with second representation.
+    _objectIsArray = (obj) ->
+      for key, i in _.chain(obj).keys().map((key) -> parseInt(key)).sortBy((num) -> num).value()
+        return false if i isnt key
+      return true
+    # Transform second representation to the first one, which can be handled correctly by Mongo.
+    for field, value of requestQuery
+      if _.isObject(value) and _objectIsArray(value)
+        requestQuery[field] = _.values(value)
+
     modelQuery = @options.find?(requestContext) or {}
     queryPromises = []
 

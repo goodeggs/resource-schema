@@ -1,5 +1,6 @@
 language: node_js
 node_js:
+  - '4.2.6'
   - '0.10'
 before_install:
   - curl -sSL https://github.com/goodeggs/travis-utils/raw/master/mongodb.sh | MONGO_VERSION=2.6.4 sh
