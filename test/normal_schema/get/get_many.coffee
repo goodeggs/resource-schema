@@ -542,6 +542,17 @@ suite 'GET many', ({withModel, withServer}) ->
           expect(@response.body[0]).to.have.property 'price', 12
           expect(@response.body[1]).to.have.property 'price', 27
 
+        it 'transforms object array to the array', ->
+          @response = @request.sync.get
+            url: '/products?price[0]=12&price[1]=27&price[2]=10',
+            json: true
+
+          expect(@response.statusCode).to.equal 200
+          expect(@response.body).to.have.length 3
+          expect(@response.body[0]).to.have.property 'price', 10
+          expect(@response.body[1]).to.have.property 'price', 12
+          expect(@response.body[2]).to.have.property 'price', 27
+
       describe 'renamed field', ->
         withModel (mongoose) ->
           mongoose.Schema
