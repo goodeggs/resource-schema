@@ -549,9 +549,8 @@ suite 'GET many', ({withModel, withServer}) ->
 
           expect(@response.statusCode).to.equal 200
           expect(@response.body).to.have.length 3
-          expect(@response.body[0]).to.have.property 'price', 10
-          expect(@response.body[1]).to.have.property 'price', 12
-          expect(@response.body[2]).to.have.property 'price', 27
+          prices = @response.body.map (product) -> product.price
+          expect(prices).to.include 10, 12, 27
 
       describe 'renamed field', ->
         withModel (mongoose) ->
