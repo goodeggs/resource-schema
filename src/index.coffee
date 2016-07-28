@@ -135,7 +135,7 @@ module.exports = class ResourceSchema
       limit = @_getLimit req.query
       modelQuery.limit(limit) if limit
 
-      skip = req.query.$skip
+      skip = parseInt(req.query.$skip, 10)
       modelQuery.skip(skip) if skip
 
       sort = @_getSort req.query
@@ -480,9 +480,9 @@ module.exports = class ResourceSchema
   ###
   _getLimit: (query) =>
     if query.$limit?
-      query.$limit
+      parseInt(query.$limit, 10)
     else if @options.limit?
-      @options.limit
+      parseInt(@options.limit, 10)
     else
       1000
 
