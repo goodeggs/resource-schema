@@ -412,23 +412,23 @@ new ResourceSchema(Product, schema, {
 
 ### .createModelFromResource(model, {req, res, next})
 
-Convert from model representation to resource representation
+Convert from resource representation to model representation
 
 ### .createModelsFromResources(models, {req, res, next})
 
-Convert from multiple model representations to their corresponding resource representations
+Convert from multiple resource representations to their corresponding model representations
 
 ### .createResourceFromModel(resource, {req, res, next})
 
-Convert from resource representation to model representation
+Convert from model representation to resource representation
 
 ### .createResourcesFromModels(resources, {req, res, next})
 
-Convert from multiple resource representations to their corresponding model representations
+Convert from multiple model representations to their corresponding resource representations
 
 ## Generating Middleware
 
-Once define a new resource, call .get(), .post(), .put(), or .delete() to generate the appropriate middleware to handle the request.
+Once you've defined a new resource, call .get(), .post(), .put(), or .delete() to generate the appropriate middleware to handle the request.
 
 ``` javascript
 var resource = new ResourceSchema(Model, schema, options);
