@@ -843,7 +843,7 @@ module.exports = class ResourceSchema
 
   _handleRequestError: (err, requestContext) ->
     {req, res, next} = requestContext
-    return next boom.badRequest(err.message) if err.name in ['CastError', 'ValidationError']
+    return next boom.badRequest(err) if err.name in ['CastError', 'ValidationError']
     next boom.wrap(err)
 
   _getResourceCount: (mongoQuery, requestContext) ->
