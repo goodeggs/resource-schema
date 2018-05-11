@@ -112,7 +112,7 @@ module.exports = class ResourceSchema
       try
         @_convertTypes(query)
       catch err
-        return next boom.wrap err
+        return next boom.boomify err
 
       modelQuery = @Model.findOne(query)
 
@@ -184,7 +184,7 @@ module.exports = class ResourceSchema
       deferred = q.defer()
       model.save (err, modelSaved) ->
         if err?
-          deferred.reject(boom.wrap err)
+          deferred.reject(boom.boomify err)
         else
           deferred.resolve(modelSaved)
       deferred.promise
@@ -215,7 +215,7 @@ module.exports = class ResourceSchema
         modelsSaved = if Array.isArray(modelsSaved[0]) then modelsSaved[0] else modelsSaved
 
         if err?
-          d.reject(boom.wrap err)
+          d.reject(boom.boomify err)
         else
           d.resolve(modelsSaved)
       d.promise
@@ -245,7 +245,7 @@ module.exports = class ResourceSchema
 
     @Model.findOne query, (err, modelFound) =>
       if err?
-        deferred.reject(boom.wrap err)
+        deferred.reject(boom.boomify err)
 
       model = if modelFound
         delete rawUpdatedModel._id
@@ -261,7 +261,7 @@ module.exports = class ResourceSchema
 
       model.save (err, modelSaved) ->
         if err?
-          deferred.reject(boom.wrap err)
+          deferred.reject(boom.boomify err)
         else
           deferred.resolve(modelSaved)
 
@@ -332,7 +332,7 @@ module.exports = class ResourceSchema
       query[paramId] = idValue
 
       @Model.findOneAndRemove(query).exec (err, removedInstance) =>
-        return next boom.wrap(err) if err
+        return next boom.boomify(err) if err
         return next boom.notFound("Resource with id #{idValue} not found from #{@Model.modelName} collection") if not removedInstance?
         res.status(204)
         res.body = "Resource with id #{idValue} successfully deleted from #{@Model.modelName} collection"
@@ -378,7 +378,7 @@ module.exports = class ResourceSchema
       resourceQuery = @_getResourceQuery requestQuery
     catch err
       deferred = q.defer()
-      deferred.reject boom.wrap err
+      deferred.reject boom.boomify err
       return deferred.promise
 
     for resourceField, value of resourceQuery
@@ -388,7 +388,7 @@ module.exports = class ResourceSchema
           query = @schema[resourceField].find value, {req, res, next}
         catch err
           deferred = q.defer()
-          deferred.reject boom.wrap err
+          deferred.reject boom.boomify err
           return deferred.promise
         deepExtend(modelQuery, query)
 
@@ -397,7 +397,7 @@ module.exports = class ResourceSchema
         do =>
           d = q.defer()
           @schema[resourceField].findAsync value, {req, res, next}, (err, query) =>
-            return d.reject boom.wrap err if err
+            return d.reject boom.boomify err if err
             deepExtend(modelQuery, query)
             d.resolve()
           queryPromises.push(d.promise)
@@ -782,7 +782,7 @@ module.exports = class ResourceSchema
         d = q.defer()
         resolveMethod requestContext, (err, result) ->
           if err
-            d.reject boom.wrap(err)
+            d.reject boom.boomify(err)
           else
             requestContext[resolveVar] = result
             d.resolve()
@@ -801,7 +801,7 @@ module.exports = class ResourceSchema
           d = q.defer()
           resolveMethod requestContext, (err, result) ->
             if err
-              d.reject boom.wrap(err)
+              d.reject boom.boomify(err)
             else
               requestContext[resolveVar] = result
               d.resolve()
@@ -816,7 +816,7 @@ module.exports = class ResourceSchema
       res.body = resource
       next()
     .then null, (err) ->
-      next boom.wrap err
+      next boom.boomify err
 
 
   _sendResources: (models, requestContext) ->
@@ -826,7 +826,7 @@ module.exports = class ResourceSchema
       res.body = resources
       next()
     .then null, (err) ->
-      next boom.wrap err
+      next boom.boomify err
 
 
   ###
@@ -844,7 +844,7 @@ module.exports = class ResourceSchema
   _handleRequestError: (err, requestContext) ->
     {req, res, next} = requestContext
     return next boom.badRequest(err) if err.name in ['CastError', 'ValidationError']
-    next boom.wrap(err)
+    next boom.boomify(err)
 
   _getResourceCount: (mongoQuery, requestContext) ->
     {req, res, next} = requestContext
